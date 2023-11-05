@@ -10,10 +10,10 @@ Files contained in this repository:
    b. Background information on kernels and reproducing kernel Hilbert spaces for SVGD
 3. Report on SVGD.   
 4. Experiments folder containing code to reproduce the results given in report. Contains 2 subfolders:
-   a. SVGD. This folder contains the code to reproduce SVGD results given in report. To reproduce the results, navigate to the local folder and run:
+   - a. SVGD. This folder contains the code to reproduce SVGD results given in report. To reproduce the results, navigate to the local folder and run:
      - 'python sampling.py' and
      - 'python variance_collapse.py'
-   b. SVPG. This folder contains the code to reproduce SVPG results given in report. To reproduce the results, navigate to the local folder and run:
+   - b. SVPG. This folder contains the code to reproduce SVPG results given in report. To reproduce the results, navigate to the local folder and run:
       - 'python acrobot.py' and
       - 'python cartpole.py' and
       - 'python lunar_lander.py'
