@@ -1,0 +1,3 @@
+# Ignore __pycache__ folders
+**/experiments/SVGD/__pycache__/
+**/experiments/SVPG/__pycache__/
