@@ -1,0 +1,143 @@
+\chapter{Major Advantages and Limitations of Vanilla SVGD}
+\label{chap:limitations}
+
+\section{Introduction}
+
+This chapter discusses the major advantages and limitations of vanilla SVGD. Furthermore, a brief comparison between SVGD and alternative inference/sampling methods is given, together with a discussion of several improvements to vanilla SVGD.
+
+\section{Advantages and Comparison to Other Approaches}
+
+\paragraph*{Advantages relative to MCMC and VI}$\\$
+Stein Variational Gradient Descent (SVGD) integrates key benefits from both variational inference (VI) and Markov Chain Monte Carlo (MCMC) methods \citep[e.g.,][]{yan_svgd_local, ai_mk_svgd}. Whilst MCMC methods are guaranteed to be asymptotically correct \citep[e.g.,][]{kingma_vi_mcmc}, the auto-correlation between successive sample points often results in slow convergence in practice \citep{robert_mcmc, zhang_vi_advances}, which necessitates simulating long Markov chains to achieve high accuracy. Conversely, VI methods are generally much faster than MCMC methods \citep{gunapti_vi_mcmc, ganguly_vi_intro}, but are usually not asymptotically correct \citep{blei_vi_review}. This means that, in most cases, the variational distribution will not even asymptotically match the target distribution.
+
+SVGD lies somewhere in the middle between MCMC and VI methods \citep{detommaso_svn, pinder_stein_gp}, and can be viewed as either a non-parametric VI algorithm or a deterministic, particle-based sampling algorithm \citep{ai_mk_svgd}. 
+On the one hand, like other VI methods, SVGD is generally faster than MCMC methods due to the deterministic nature of its updates and efficient use of gradient information \citep[e.g.,][]{kim_bayesian_maml}\footnote{Note that, some MCMC methods such as Hamiltonian Monte Carlo, also use gradient information, but rely on randomness in updating sample points.}, and since SVGD does not require a \textit{burn-in} phase as do many MCMC methods. On the other hand, since SVGD is non-parametric and does not involve any assumptions on the form of the target distribution, it potentially allows a more accurate approximation of the target distribution compared to traditional VI methods, and has the added benefit of being asymptotically correct in the sense of weak convergence to the target distribution (see \citet{liu_svgd_gf} and \citet{lu_svgd_scaling}, for example, for proofs of convergence in the mean-field limit).
+
+%\citep[e.g.,][]{liu_svgd_gf, lu_svgd_scaling}. 
+
+Another distinguishing property of SVGD in the context of sampling is that SVGD evolves a set of particles simultaneously, whereas MCMC methods generate samples sequentially \citep{ye_stein_self_repulsive}. Furthermore, SVGD does not involve rejecting proposed sample points and hence the effective number of particles is equal to the number of initial particles \citep{han_gf_svgd}.
+
+\paragraph*{Other Advantages}$\\$
+A defining feature of SVGD is that it provides a spectrum of inference algorithms depending on the number of particles used. When using only a single particle ($n=1$), and a kernel that satisfies $\nabla_x k(x, x') = 0$ whenever $x = x'$, then SVGD reduces to gradient ascent for maximum \textit{a posteriori} (MAP) estimation \footnote{This is true assuming the target distribution $p(x)$ represents a posterior distribution, otherwise SVGD reduces to gradient ascent for maximum likelihood estimation.} \citep{liu_svgd}. Conversely, in the limit of infinitely many particles ($n \rightarrow \infty$), SVGD becomes a full Bayesian inference algorithm \citep{liu_svgd}. Hence, SVGD is considered to be more particle-efficient than MCMC methods since it can achieve good results with relatively few particles \citep[e.g.,][]{liu_riemann_svgd, das_fast}.
+In addition to being particle-efficient, SVGD is also considered to be iteration-efficient \citep{liu_riemann_svgd} since it is guaranteed to make progress in every iteration in the sense of decreasing the KL divergence \citep[][Theorem 3.3(2)]{liu_svgd_gf}.
+Lastly, (vanilla) SVGD (and variants thereof) are very versatile, having been applied to several complex problems such as training a Generative Adversarial Network (GAN) \citep{wang_svgd_gan}, training a Variational Autoencoder (VAE) \citep{pu_svgd_vae}, and training Bayesian Neural Networks (BNNs) \citep[e.g.,][]{liu_svgd}. Moreover, as we discuss in Chapter \ref{chap:svpg}, a technique based on SVGD has been applied in reinforcement learning for learning a diverse set of policies \citep{liu_svpg}.
+
+\section{Limitations and Improvements}
+
+Whilst SVGD has the potential to accurately approximate complex target distributions in certain cases, various challenges exist that inhibit the widespread use of SVGD in practice. This section discusses the major limitations of SVGD, shedding light on the applicability of SVGD in practice.
+
+\paragraph*{Variance collapse}$\\$
+The major limitation of SVGD is the so-called \textit{variance collapse} phenomenon \citep{ba_variance_collapse}, also referred to as the \textit{mode collapse} phenomenon \citep{dangelo_annealed_svgd}. This refers to the situation in which the SVGD particles collapse onto a single mode of the target distribution, as depicted in Figure \ref{fig:mode_collapse}. When the particles experience mode collapse, the variance of the particles drastically underestimates the variance of the target distribution, in which case the particles fail to explain the uncertainty in the target distribution \citep{ba_variance_collapse}. This phenomenon is analogous to the problem of \textit{particle degeneracy} in particle filters, which refers to the situation in which only a few particles are assigned a non-negligible weight and the remaining particles have weights close to zero, and hence are redundant \citep[e.g.,][]{li_particle_degeneracy, fan_stein_filtering}.
+
+% \textcolor{red}{explain particle degeneracy in the context of particle filters.}
+
+This phenomenon has been studied analytically by \citet{zhuo_mp_svgd} and \citet{ba_variance_collapse} who show that the variance/mode collapse becomes more severe as the dimension $d$ of the target distribution increases (keeping the number of particles fixed). To understand why this is the case, let $D(x_i) = \mathbb{E}_{X_j \sim Q}\left[ k(X_j, x_i) \nabla_{X_j} \log p(X_j)\right]$ and $R(x_i) = \mathbb{E}_{X_j \sim Q} \left[\nabla_{X_j}k(X_j, x_i) \right]$ respectively denote the \textit{driving force} and \textit{repulsive force} on $x_i$ in the SVGD update rule. \citet{zhuo_mp_svgd} show that there is a negative correlation between the dimensionality $d$ and the magnitude of the repulsive force $\lVert R(x_i) \rVert$, which leads to the mode/variance collapse in high dimensions \footnote{As pointed out by \citet{dangelo_annealed_svgd}, the mode/variance collapse phenomenon may also be the result of the \textit{mode-seeking} limitation inherent to methods based on minimising the reverse KL divergence. This refers to the fact that minimisation of the reverse KL divergence leads to mode-seeking behaviour, which results in a tendency to underestimate the variance of the posterior. See \citet{chan_mode_seeking} for an excellent discussion on the mode-seeking limitation.}.
+This is a consequence of the fact that distance metrics and kernels defined in terms of a distance metric (e.g., the RBF kernel) suffer from the \textit{curse of dimensionality} (COD) \citep{spigler_cod, ting_isolation_kernel}, which means that the kernel similarities $k(x_j, x_i)$, and hence the gradients $\nabla_{x_j}k(x_j, x_i)$, tend to zero as the dimensionality increases. Consequently, as the dimensionality increases, the magnitude of the repulsive force $\lVert R(x_i) \rVert$ decreases dramatically, as illustrated in Figure \ref{fig:norm_collapse}. This results in the SVGD dynamics becoming more dependent on the \textit{driving force} term $D(x_i)$ \citep{ba_variance_collapse}, essentially reducing SVGD to a gradient ascent algorithm for maximising the log-likelihood under the target distribution \citep{liu_grassman_svgd}. This is also illustrated in Figure \ref{fig:norm_collapse} where the magnitudes of the driving forces become closer and closer to the overall update magnitude as the dimensionality increases.
+
+% \textcolor{red}{connection to posterior collapse in VAEs}.
+
+We illustrate the variance collapse phenomenon by using SVGD to sample from a $d$-variate isotropic Gaussian distribution $\mathcal{N}_d(0, \sigma^2 I)$, with $\sigma^2 = 1$, as was done by \citet{ba_variance_collapse}. We then use the SVGD particles to estimate the variance term $\sigma^2$ for increasing dimensions. As illustrated in Figure \ref{fig:variance_collapse}, the variance of the target distribution (estimated by the particles) quickly tends to zero as the dimensionality increases.
+
+Several variants of vanilla SVGD have been proposed to overcome the variance/mode collapse phenomenon. The main direction for improving upon vanilla SVGD is to use dimension reduction to project the particles and the score function $s_p(x)$ onto lower-dimensional spaces, directly combatting the COD. Along this line, \citet{gong_sliced_ksd} propose projecting the score function and particles onto optimal one-dimensional slices, yielding a variant of SVGD called sliced-SVGD (S-SVGD). However, using one-dimensional slices is suboptimal since it results in a significant loss of information. \citet{chen_projected_svgd} improve upon this approach by instead projecting the score function and particles onto the leading eigenvectors of some gradient information matrix, which then yields the projected SVGD (pSVGD) algorithm. However, computing the eigenvectors (and possibly the gradient information matrix itself) is computationally expensive and limits the scalability of pSVGD. A further improvement is given by \cite{liu_grassman_svgd} who propose projecting the data onto a Grassman manifold, on which the particles are evolved according to SVGD dynamics. This approach not only effectively reduces the dimension of the problem, but also incorporates information about the underlying geometry into the updates, which is similar to the Riemann SVGD (R-SVGD) \citep{liu_riemann_svgd} variant of SVGD. Finally, if the target distribution has a known graphical structure, message-passing variants of SVGD \citep[e.g.,][]{zhuo_mp_svgd, zhou_aump_svgd} can alleviate the variance collapse phenomenon by identifying the Markov blanket of the graphical structure.
+
+%Another variant of SVGD worth noting is Annealed SVGD (A-SVGD) \citep{dangelo_annealed_svgd}. This is a very simple variant of SVGD that incorporates an idea from Simulated Annealing (SA) \citep{kirkpatrick_sa} into the SVGD update by introducing an annealing parameter $\gamma(t) \in [0, 1]$ to balance the relative impact of the driving and repulsive forces. 
+
+%As illustrated in Figure \ref{fig:a_svgd}, A-SVGD effectively mitigates the mode collapse issue.
+
+% Ba paper propose svgd with resampling, which is commonly used in particle filters to combat particle degeneracy
+
+\begin{figure}[h!]
+% Details to construct figures:
+	% Mode collapse figure (first):
+		% n = 100 particles to sample from p(x) = 0.5 * N_2(x; [2.0, 2.0], I) + 0.5 * N_2([-2.0, -2.0], I); initial particle distribution = N_2([2.0, 2.0],  I); Adam optimizer with initial learning rate = 1e-2; max 500 iterations of SVGD; RBF kernel with median heuristic bandwidth; scaling factor of repulsive force given by alpha = 1e-9
+	% Variance collapse figure (second):
+		% values of d taken as a grid of 100 equally spaced values in [1, 1000]; max iterations of 1000 for sampling from p(x) for each value of d; RBF kernel with median heuristic bandwidth; initial distribution for particles = N_d(0, 10 * I); Adam optimizer with initial learning rate = 1e-2; convergence detected when ||\phi||_2 < tol (tol = 1e-6); n = 50 particles used for each value of d.
+	\centering
+	\subfloat[\label{fig:mode_collapse} Mode collapse.]{
+		\includegraphics[height=5cm, width=5cm, keepaspectratio]{mode_collapse.png}
+	}
+	\subfloat[\label{fig:norm_collapse} Diminishing repulsive force.]{
+		\includegraphics[height=5cm, width=5cm, keepaspectratio]{norms_collapse.pdf}
+	}
+	\subfloat[\label{fig:variance_collapse} Variance collapse.]{
+		\includegraphics[height=5cm, width=5cm, keepaspectratio]{variance_collapse.pdf}
+	}
+	\caption{\label{fig:mode_variance_collapse} Illustration of mode and variance collapse. To illustrate mode collapse (left), we use SVGD to sample from a GMM given by: $p(x) = 0.5 \mathcal{N}_2(x; \begin{bmatrix}2.0 & 2.0 \end{bmatrix}, I) + 0.5 \mathcal{N}_2(x; \begin{bmatrix}-2.0 & -2.0 \end{bmatrix}, I)$, where we initialise the particles from a bivariate Gaussian centred at the positive mode of the GMM. Since it is not possible to visualise mode collapse for a high-dimensional distribution, we mimic the effect on a two-dimensional GMM by scaling the repulsive force in the SVGD updates by an amount close to zero. We visualise the diminishing repulsive forces (middle) by plotting the average repulsive and driving force magnitudes (averaged over all particles and all iterations of SVGD) for each value of $d$. It is evident that the average magnitude of the repulsive force drops dramatically for increasing dimensionality, and that the converse is true for the average magnitude of the driving force. We illustrate variance collapse (right) by using SVGD particles to estimate the marginal variance $\sigma^2$ of an isotropic Gaussian $\mathcal{N}_d(0,\sigma^2 I)$ for increasing dimensionality. In all cases, we use an RBF kernel with median heuristic bandwidth - see Equation \ref{eqn:median_heuristic}.}
+\end{figure}
+
+
+
+\paragraph*{Other Limitations}$\\$
+In addition to the variance collapse phenomenon, SVGD suffers from several other, albeit less severe, limitations. Firstly, vanilla SVGD can only be used for target distributions with continuous and differentiable densities. However, \citet{han_gf_svgd} introduce a gradient-free extension of SVGD that replaces the gradient $\nabla_x \log p(x)$ with a surrogate gradient $\nabla_x \log \rho(x)$, of an arbitrary auxiliary distribution $\rho(x)$, and uses importance weights to correct the bias induced by the surrogate gradient. Furthermore, \citet{han_discrete_svgd} introduce a variant of SVGD that works for discrete target distributions by transforming the discrete distribution into a piecewise continuous distribution and applying the gradient-free SVGD algorithm \citep{han_gf_svgd} to sample from the transformed distribution.
+
+Another limitation of vanilla SVGD is that the performance is heavily dependent on the choice of kernel function, where the optimal kernel function cannot be determined \textit{a priori}. To mitigate this issue, \citet{ai_mk_svgd} propose combining multiple kernels (e.g., combining several RBF kernels with different bandwidths) and automatically adjusting the weights of each component kernel, which then yields the Multiple-Kernel SVGD (MK-SVGD) variant of SVGD. Furthermore, \citet{wang_svgd_matrix_kernel} propose using matrix-valued kernels to incorporate geometric information into SVGD, such as information about the local curvature provided by the Hessian matrix. This approach also effectively reduces the sensitivity to the choice of kernel function.
+
+%\begin{figure}[h!]
+%% Details to construct figures:
+%	% Mode collapse figure (first):
+%		% n = 100 particles to sample from p(x) = 0.5 * N_2(x; [2.0, 2.0], I) + 0.5 * N_2([-2.0, -2.0], I); initial particle distribution = N_2([2.0, 2.0],  I); Adam optimizer with initial learning rate = 1e-2; max 500 iterations of SVGD; RBF kernel with median heuristic bandwidth; scaling factor of repulsive force given by alpha = 1e-9
+%	% Variance collapse figure (second):
+%		% values of d taken as a grid of 100 equally spaced values in [1, 1000]; max iterations of 1000 for sampling from p(x) for each value of d; RBF kernel with median heuristic bandwidth; initial distribution for particles = N_d(0, 10 * I); Adam optimizer with initial learning rate = 1e-2; convergence detected when ||\phi||_2 < tol (tol = 1e-6); n = 50 particles used for each value of d.
+%	\centering
+%	\subfloat[\label{fig:mode_collapse} Mode collapse.]{
+%		\includegraphics[height=5cm, width=5cm, keepaspectratio]{mode_collapse.png}
+%	}
+%	\subfloat[\label{fig:norm_collapse} Diminishing repulsive force.]{
+%		\includegraphics[height=5cm, width=5cm, keepaspectratio]{norms_collapse.pdf}
+%	}
+%	\subfloat[\label{fig:variance_collapse} Variance collapse.]{
+%		\includegraphics[height=5cm, width=5cm, keepaspectratio]{variance_collapse.pdf}
+%	}
+%	\caption{\label{fig:mode_variance_collapse} Illustration of mode and variance collapse. To illustrate mode collapse (left), we use SVGD to sample from a GMM given by: $p(x) = 0.5 \mathcal{N}_2(x; \begin{bmatrix}2.0 & 2.0 \end{bmatrix}, I) + 0.5 \mathcal{N}_2(x; \begin{bmatrix}-2.0 & -2.0 \end{bmatrix}, I)$, where we initialise the particles from a bivariate Gaussian centred at the positive mode of the GMM. Since it is not possible to visualise mode collapse for a high-dimensional distribution, we mimic the effect on a two-dimensional GMM by scaling the repulsive force in the SVGD updates by an amount close to zero. We visualise the diminishing repulsive forces (middle) by plotting the average repulsive and driving force magnitudes (averaged over all particles and all iterations of SVGD) for each value of $d$. It is evident that the average magnitude of the repulsive force drops dramatically for increasing dimensionality, and that the converse is true for the average magnitude of the driving force. We illustrate variance collapse (right) by using SVGD particles to estimate the marginal variance $\sigma^2$ of an isotropic Gaussian $\mathcal{N}_d(0,\sigma^2 I)$ for increasing dimensionality. In all cases, we use an RBF kernel with median heuristic bandwidth - see Equation \ref{eqn:median_heuristic}.}
+%\end{figure}
+
+
+%To illustrate mode collapse (left), we use SVGD to sample from a bivariate standard normal distribution where we scale the repulsive force by an amount $\alpha << 1$ in the SVGD updates. The scaling of the repulsive force mimics the effect of a diminishing SVGD repulsive force in high dimensions (this is necessary because mode collapse cannot be visualised in high dimensions). We illustrate variance collapse (right) by using SVGD particles to estimate the marginal variance $\sigma^2$ of an isotropic Gaussian $\mathcal{N}_d(0,\sigma^2 I)$.
+
+
+\section{Conclusion}
+
+This chapter discussed the major advantages and limitations of vanilla SVGD, shedding light on the applicability of SVGD in practice. We discussed the fact that SVGD combines benefits from both VI and MCMC methods, and helps to alleviate some of the limitations of both these alternative approaches. While SVGD demonstrates promising advantages, several major limitations were discussed that inhibit the widespread adoption of SVGD in practice. Specifically, SVGD suffers from mode/variance collapse in high dimensions and may be sensitive to the choice of kernel function. Fortunately, several extensions of vanilla SVGD have been proposed to alleviate these limitations, several of which were discussed in this chapter.
+
+%This chapter discussed the major advantages and limitations of vanilla SVGD. Furthermore, it was discussed that SVGD combines benefits from both VI and MCMC method, and helps to alleviate some of the limitations of both of these alternative approaches. However, it was also discussed that (vanilla) SVGD suffers from the curse of dimensionality, which limits the applicability and scalability of SVGD in practice. \textcolor{red}{how does SVGD COD compare to MCMC/VI?} Finally, several extensions of vanilla SVGD were discussed, which may help to alleviate the mode/variance collapse limitation of vanilla SVGD as well as the sensitivity to the choice of kernel function.
+
+The following chapter presents an application of SVGD in reinforcement learning known as the Stein Variational Policy Gradient method, which aims at learning ``a set of diverse but well-behaved policies'' \citep{liu_svpg}.
+
+
+%\begin{enumerate}
+%	\item Only works for continuous, differentiable densities. However, there are extensions to overcome both these limitations: Gradient-free SVGD when gradient not available and discrete SVGD.
+%	\item Sensitive to choice of kernel function. However, there are several extensions to mitigate this isue: e.g., multiple kernel SVGD
+%	\item Sensitive to initialisation.
+%	\item Limited theoretical understanding in the finite particle and finite time regime. Convergence also only guaranteed asymptotically.
+%\end{enumerate}
+
+%Weaknesses:
+%
+%1. Hyperparameter sensitivity (e.g., choice of kernel, step size sequence etc.)\\
+%2. Possibly high memory usage for very large n\\
+%3. Sensitivity to particle initialization (particles prone to collapse to mode closest to initialization)\\
+%4. Mode collapse\\
+%5. Deterministic nature may result in local optima\\
+
+%
+%\textcolor{red}{TODO: discuss improvements to vanilla SVGD. e.g.,}
+%
+%\begin{enumerate}
+%	\item Annealed SVGD: to improve diversity
+%	\item Message Passing SVGD: to overcome mode collapse
+%	\item Gradient-Free SVGD: when gradient of log target unavailable or too expensive to compute
+%	\item Multiple kernel SVGD: improves diversity
+%	\item Riemannian SVGD: improves exploration
+%	\item sliced SVGD
+%	\item SVGD with matrix-valued kernels: to include preconditioning information
+%	\item Nonlinear SVGD: improves diversity of particles by utilising an entropy-regularised objective
+%\end{enumerate}
+
+%\section{Notable Applications of SVGD}
+%
+%\begin{enumerate}
+%	\item Training a GAN
+%	\item Training a VAE
+%	\item Training a GP
+%	\item Training BNN's
+%\end{enumerate}

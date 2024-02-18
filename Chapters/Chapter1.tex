@@ -1,0 +1,46 @@
+\chapter{Introduction}
+
+\section{Introduction}
+
+In the realm of probabilistic modelling and Bayesian machine learning, accurate approximation of (or sampling from) high-dimensional target distributions poses a significant challenge, especially in the context of Bayesian inference for complex posterior distributions. Stein Variational Gradient Descent (SVGD), proposed by \citet{liu_svgd}, is a general-purpose, deterministic particle-based variational inference algorithm that attempts to address this challenge by incrementally transforming a simple base distribution (e.g. the standard normal distribution) to approximate the posterior distribution of interest. This is achieved by iteratively transporting a set of sample points (referred to as particles) from the base distribution to approximate the posterior distribution. SVGD leverages gradient information of the target distribution to guide particles toward high-density regions of the posterior, and utilises kernel information to simultaneously allow sharing of information across particles and to provide a deterministic repulsive force that prevents particles from collapsing onto a single mode.
+
+The purpose of this study is to provide a comprehensive survey of SVGD together with its theoretical underpinnings, aiming to shed light on the applicability of SVGD in practice. We hope to make SVGD more accessible to machine learning practitioners who may have a limited background in statistics. 
+
+While the report is written to be mostly self-contained, we assume that readers are familiar with basic concepts from statistics and measure theory, and are familiar with concepts in functional analysis, particularly reproducing kernel Hilbert spaces.
+
+\section{Outline of this paper}
+
+This report is organised as follows. Chapter \ref{chap:svgd} presents a comprehensive development of SVGD, including its theoretical underpinnings in Stein's method, Stein discrepancy, and kernelised Stein discrepancy. Furthermore, a simple illustration of SVGD is given in the context of sampling, and the convergence properties of SVGD are discussed. Due to the statistical nature and background of SVGD, Chapter \ref{chap:svgd} is more mathematical than later chapters, and is presented in the form of definitions and theorems, whereas later chapters are more focused on intuitive discussions. Chapter \ref{chap:limitations} discusses the major advantages and limitations of SVGD, together with a comparison of SVGD to variational inference and Markov chain Monte Carlo methods. Furthermore, several variants of SVGD are discussed that may alleviate some of its major limitations. Chapter \ref{chap:svpg} discusses an implementation of SVGD in the context of reinforcement learning known as the Stein Variational Policy Gradient \citep{liu_svpg} (SVPG) method, which is used for training a set of diverse policies. Furthermore, a novel variant of SVPG is presented and several experiments are conducted. The report is concluded in Chapter \ref{chap:conclusion}.
+
+\section{Notation and Terminology}
+
+To simplify notation and maintain generality, we do not distinguish between a measure, $P$, and a distribution $P$. We sometimes refer to a distribution $P$ by its density function, $p$, as the density function uniquely characterises the distribution. Throughout this paper, multivariate distributions and functions are assumed, with univariate cases presented in footnotes where applicable. The theory presented applies to both univariate and multivariate settings, with minimal adjustments. Hence, our notation does not explicitly distinguish univariate from multivariate functions and distributions.
+
+
+\section{Note on GitHub repository}
+
+There is a GitHub repository accompanying this report available at \url{https://github.com/lhalgryn/Stein-Variational-Gradient-Descent} containing the following:
+\begin{enumerate}
+	\item Background information on measure theory and reproducing kernel Hilbert spaces in the form of Jupyter Notebooks.
+	\item Code to reproduce the experiments and results contained in this report.
+	\item A Jupyter Notebook assignment on SVGD.
+\end{enumerate}
+
+Furthermore, the repository contains a README.txt file that explains how the code can be used to reproduce the results presented in this report.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

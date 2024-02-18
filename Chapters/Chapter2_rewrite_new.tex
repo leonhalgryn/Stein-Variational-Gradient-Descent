@@ -1,0 +1,812 @@
+\chapter{Statistical Development of stein variational gradient descent}
+\label{chap:svgd}
+\section{Introduction}
+
+Stein Variational Gradient Descent (SVGD) \citep{liu_svgd} is a variational inference algorithm with roots in Stein’s method, which is an approach used in theoretical statistics to bound a given measure of distance between two distributions. Traditionally, Stein’s method has primarily been used as a tool for proving central limit theorems. However, the advent of kernelised Stein discrepancy (KSD) \citep{liu_ksd, chwialkowski_ksd} has given rise to a powerful framework for conducting goodness-of-fit (GOF) tests, and subsequently to a flexible framework for variational inference. 
+
+%This chapter is devoted to a statistical development of SVGD. We first provide relevant background information in Section \ref{section:2_background}, in Section \ref{section:2_steins_method} we provide an overview of Stein's method, in Section \ref{section:2_stein_discrepancy} we discuss the Stein discrepancy and its kernelised variant in Section \ref{section:ksd} and, finally, in Section \ref{section:2_svgd} we discuss the SVGD algorithm.
+
+This chapter is dedicated to the statistical development SVGD.  The chapter aims to provide a comprehensive understanding of the statistical foundations of SVGD, including its theoretical underpinnings and practical implementation. This chapter begins with relevant background information in Section \ref{section:2_background}. In Section \ref{section:2_steins_method}, an overview of Stein's method is provided. Section \ref{section:2_stein_discrepancy} discusses the Stein discrepancy and its kernelised variant is presented in Section \ref{section:2_ksd}. Section \ref{section:2_svgd} delves into the SVGD algorithm and illustrates the usage of SVGD on a basic sampling experiment. Finally, Section \ref{section:2_convergence} provides an overview of the convergence properties of SVGD and a conclusion is given in Section \ref{section:conclusion}.
+
+%\textcolor{red}{TODO: discuss why this chapter is more mathematical than later chapters.}
+%===========================================================================================
+% ---------------------------------------- 		BACKGROUND 		----------------------------------------
+\section{Background}
+\label{section:2_background}
+
+Before we discuss Stein's method in general, we first discuss Stein's characterisation of the normal distribution \citep{stein1972}, which has since become known as \textit{Stein's lemma}. Furthermore, we provide a brief overview of integral probability metrics (IPMs), for which bounds can be obtained via Stein's method.
+
+\subsection{Stein's Lemma}
+
+\renewcommand{\thetheorem}{2.1}
+\begin{lemma}
+\emph{(Stein's lemma)}\newline
+\label{lemma:steins_lemma}
+Let $Z \sim  \mathcal{N}(0, 1)$, and let $f: \mathbb{R} \rightarrow \mathbb{R}$ be an absolutely continuous function such that $\mathbb{E}\left|f'(Z)\right| < \infty$ \citep{chatterjee_survey}. Then the following holds:
+\begin{equation*}
+\mathbb{E}\left[Z f(Z) \right] = \mathbb{E}\left[f'(Z) \right] \enspace.
+\end{equation*}
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+\end{proof}
+\end{lemma}
+
+Lemma \ref{lemma:steins_lemma} characterises the standard normal distribution in the sense that the lemma holds for no other distribution of $Z$ \citep{stein1972}.
+%Lemma \ref{lemma:steins_lemma} characterises the standard normal distribution in the sense that it is the only distribution that satisfies Stein's lemma \citep{stein1972}.
+
+\renewcommand{\thetheorem}{2.2}
+\begin{corollary}
+\label{corollary:2_2}
+$\newline$
+While Stein's lemma (Lemma \ref{lemma:steins_lemma}) is given for the univariate standard normal case, it can be generalised to both the non-standard and multivariate cases: if $X \sim \mathcal{N}(\mu, \sigma^2)$ and $f:\mathbb{R} \rightarrow \mathbb{R}$ is absolutely continuous, then
+\begin{equation*}
+\frac{1}{\sigma^2}\mathbb{E}\left[(X - \mu)f(X) \right] = \mathbb{E}\left[f'(X) \right] \enspace.
+\end{equation*}
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+\end{proof}
+\end{corollary}
+
+\textbf{Remark}: The converse of Stein's lemma is also true: if $\frac{1}{\sigma^2}\mathbb{E}\left[(X - \mu)f(X) \right] = \mathbb{E}\left[f'(X) \right]$, then $X \sim \mathcal{N}(\mu, \sigma^2)$.
+
+The remarkable property of Stein's lemma is that it enables conclusions to be drawn about the \textit{approximate} normality of arbitrary random variables $X$. Suppose $X \sim Q$ is an arbitrary, real-valued random variable with mean $\mu$ and variance $\sigma^2$, and suppose that the relationship, $$\frac{1}{\sigma^2}\mathbb{E}_{X \sim Q}\left[(X - \mu)f(X) \right] \approx \mathbb{E}_{X \sim Q}\left[f'(X) \right]$$ holds for all continuous functions $f$ in a rich class of functions $\mathcal{F}$, then we may conclude that $X$ is approximately normally distributed, i.e. $X \overset{\cdot}{\sim} \mathcal{N}(\mu, \sigma^2)$.
+
+Stein's method, presented in Section \ref{section:2_steins_method}, generalises and formalises this line of reasoning to distributions beyond the normal, and allows comparing the distribution $Q$ to arbitrary target distributions.
+% $P$.
+%allowing comparisons between the distribution $Q$ and arbitrary reference/target distributions $Q$.
+
+%then if we have that $\frac{1}{\sigma^2}\mathbb{E}\left[(X - \mu)f(X) \right] \approx \mathbb{E}\left[f'(X) \right]$ holds for all absolutely continuous functions in a rich class of functions $f \in \mathcal{F}$, then we may conclude that $X$ is approximately normally distributed, i.e., $X \overset{\cdot}{\sim} \mathcal{N}(\mu, \sigma^2)$.
+
+\subsection{Integral probability metrics}
+
+Integral probability metrics (IPMs), defined below, are a special class of probability metrics that can be used to quantify the distance between distributions \citep[e.g.,][]{muller_ipm}. 
+\renewcommand{\thetheorem}{2.3}
+\begin{definition}
+\label{defn:ipm}
+\emph{(Integral Probability Metric)}\newline
+Let $P$ and $Q$ be probability measures defined on a measurable space $(\Omega, \mathcal{X})$, and let $\mathcal{H}$ denote a class of bounded, real-valued measurable functions on $\mathcal{X}$. An IPM on $\mathcal{X}$ for measuring the distance between the distributions $P$ and $Q$ takes the following form as given by \citet{gretton_ipm}:
+%Let $\mathcal{X}$ be a measurable space \footnote{This is an abuse of notation since a measurable space is formally a pair $(\Omega, \mathcal{X})$, where $\Omega$ denotes a set and $\mathcal{X}$ denotes a $\sigma$-algebra on $\Omega$.}, and let $P$ and $Q$ be probability measures defined on $\mathcal{X}$. Furthermore, let $\mathcal{H}$ denote a class of bounded, real-valued measurable functions on $\mathcal{X}$. An IPM on $\mathcal{X}$ for measuring the difference between $P$ and $Q$ takes the form \citep{gretton_ipm}
+\begin{align}
+d_{\mathcal{H}}(Q, P) :&= \underset{h \in \mathcal{H}}{\sup} \left|\int_{\mathcal{X}}hdQ - \int_{\mathcal{X}}hdP \right| \\ &= \underset{h \in \mathcal{H}}{\sup}\left|\mathbb{E}_{X \sim Q}\left[h(X)\right] - \mathbb{E}_{Y \sim P}\left[h(Y)\right] \right| \label{eqn:ipm} \enspace.
+\end{align}
+\end{definition}
+
+\textbf{Remark}: The class of functions $\mathcal{H}$ is a ``measure-determining class of test functions" \citep{anastasiou_stein} that induces/specifies the specific IPM. Section \ref{section:2_stein_discrepancy} discusses the \textit{Stein discrepancy} measure as a special case of an IPM \citep{gong_sliced_ksd} in which members of the function class $\mathcal{H}$ are chosen to yield zero expectation under the target distribution $P$ \citep{hu_stein_neural_sampler, gorham_stochastic_sd}. This is especially useful in settings where the target distribution is complex and cannot be evaluated in closed form, and hence expectations under the target distribution are intractable to compute.
+
+
+%\renewcommand{\thetheorem}{2.4}
+%\begin{example}
+%Two notable IPMs (discussed further in \citet{chen_steins_method}) are:
+%\begin{enumerate}
+%\item The total variation distance; this is induced by the function class \newline $\mathcal{H}_{\text{TV}} = \{h: h(x) = \mathbbm{1}(x \in A), A \subset \mathbb{R}\}$, the class of Borel-measurable indicator functions.
+%\item The Wasserstein distance; this is induced by $\mathcal{H}_\text{W} =\{h: |h(x) - h(y)| \le |x - y|\}$.
+%\end{enumerate}
+%\end{example}
+%\textcolor{red}{TODO: confirm these IPMs above are correct.}
+
+\textbf{Remark}: Suppose we are given a sequence of probability measures $\{Q_n\}$ for approximating an arbitrary target probability measure $P$. Provided the class of functions $\mathcal{H}$ in Definition \ref{defn:ipm} is sufficiently rich, the IPM induced by $\mathcal{H}$ metricises weak convergence \citep{gorham_sample_quality_2015}. This means that $d_{\mathcal{H}}(Q_n, P) \rightarrow 0$ as $n \rightarrow \infty \implies Q_n$ weakly converges to the target $P$, which we denote by $Q_n \rightharpoonup P$.
+
+%If the class of functions $\mathcal{H}$ in Definition \ref{defn:ipm} is sufficiently rich, then the IPM induced by $\mathcal{H}$ metricises weak convergence \citep{gorham_sample_quality_2019}. That is, $d_{\mathcal{H}}(P, Q_n) \rightarrow 0$ as $n \rightarrow \infty \implies Q_n \rightharpoonup P$  as $n \rightarrow \infty$, where $Q_n \rightharpoonup P$ denotes weak convergence of $Q_n$ to $P$.
+
+%===========================================================================================
+% ---------------------------------------- 		STEINS METHOD 		----------------------------------------
+\section{Stein's method}
+\label{section:2_steins_method}
+
+For the remainder of this section, we assume that we are working with two probability measures, $P$ and $Q$, defined on a measurable space $(\Omega, \mathcal{X})$, where $\mathcal{X} \subseteq \mathbb{R}^d$, with continuous probability density functions $p$ and $q$ respectively. Stein's method is a three-step procedure for bounding the distance (in the form of an IPM) between the two distributions \citep{gorham_sample_quality}. Given a reference IPM in the form of Equation (\ref{eqn:ipm}), Stein's method can be used to obtain (upper, lower, or two-sided) bounds on the distance $d_{\mathcal{H}}(Q, P)$.
+
+%That is, given an IPM,
+%$$d_{\mathcal{H}}(P, Q) = \underset{h \in \mathcal{H}}{\sup} \left| \mathbb{E}_{X \sim P}\left[h(X) \right] - \mathbb{E}_{Y \sim Q}\left[h(Y) \right]\right|$$
+%Stein's method is used to obtain (upper, lower, or two-sided) bounds  on the distance $d_{\mathcal{H}}(P, Q)$.
+%\textcolor{red}{TODO: give references to further information on Stein's method}.
+
+%\textbf{Remark and Notation}: While we assume multivariate random variables for our discussion, the results carry over exactly to the univariate setting. Hence, we do not distinguish between univariate and multivariate random variables or functions, since the theory applies equally in both settings.
+
+We now discuss each of the three steps in Stein's method in turn. See, \citet{ley_approx_expectations} and \citet{ross_stein_fundamentals}, for example, for more detailed discussions on Stein's method.
+
+%(see e.g., \citet{ley_approx_expectations} and \citet{ross_stein_fundamentals} for a detailed discussion of Stein's method).
+
+\subsection*{Step 1: Stein Operator}
+
+The first step in Stein's method involves specifying/constructing a so-called \textit{Stein operator} to characterise the distribution of interest. See \citet{anastasiou_stein}, for example, for a discussion of several well-known methods to construct Stein operators.
+
+\renewcommand{\thetheorem}{2.4}
+\begin{definition}
+\label{defn:stein_operator1}
+\emph{(Stein operator)}$\newline$
+Given a distribution $P$ with probability density function $p$, and a class of functions $\mathcal{F}$, a Stein operator $\mathcal{T}_p: \mathcal{F} \rightarrow \mathbb{R}^d$ for characterising $P$, is an operator acting on functions $f \in \mathcal{F}$ such that the following holds:
+\begin{equation}
+\label{eqn:stein_operator}
+\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X)\right] = 0 \hspace{0.1cm} \forall f \in \mathcal{F} \iff X \sim P \enspace.
+\end{equation}
+The class of functions $\mathcal{F}$ for which the above holds is called a \textbf{Stein class} for the distribution $P$, which we denote by $\mathcal{F}(\mathcal{T}_p)$, and the equivalence in Equation (\ref{eqn:stein_operator}) is called a Stein characterisation \citep{anastasiou_stein}.
+\end{definition}
+%\renewcommand{\thetheorem}{2.5}
+%\begin{definition}
+%\label{defn:stein_operator1}
+%\emph{(Stein operator)}$\newline$
+%Given a distribution $P$ with probability density function $p$, and a class of functions $\mathcal{F}$, a Stein operator $\mathcal{T}_p: \mathcal{F} \rightarrow \mathbb{R}$ for characterising $P$, is an operator acting on functions $f \in \mathcal{F}$, where  $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$, such that the following holds
+%\begin{equation}
+%\label{eqn:stein_operator}
+%\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X)\right] = 0 \hspace{0.1cm} \forall f \in \mathcal{F} \iff X \sim P \enspace.
+%\end{equation}
+%The class of functions $\mathcal{F}$ for which the above holds is called a \textbf{Stein class} for the distribution $P$, which we denote by $\mathcal{F}(\mathcal{T}_p)$, and the equivalence in Equation (\ref{eqn:stein_operator}) is called a Stein characterisation \citep{anastasiou_stein}.
+%\end{definition}
+
+%\renewcommand{\thetheorem}{2.5}
+%\begin{definition}
+%\emph{(Stein operator)}$\newline$
+%A Stein operator (for a distribution $P$ with probability density function $p$) is an operator $\mathcal{T}_p: \mathcal{F} \rightarrow \mathbb{R}^{d'}$ acting on functions $f \in \mathcal{F}$, where $f:\mathcal{X} \rightarrow \mathbb{R}^{d'}$ can be either a scalar-valued ($d'=1$) or a vector-valued function ($d '> 1$), such that the following holds
+%\begin{equation}
+%\label{eqn:stein_operator}
+%\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X)\right] = 0 \hspace{0.1cm} \forall f \in \mathcal{F} \iff X \sim P
+%\end{equation}
+%The class of functions $\mathcal{F}$ for which the above holds is called a \textit{Stein class} for the distribution $P$, which we will denote by $\mathcal{F}(\mathcal{T}_p)$, and the equivalence in Equation (\ref{eqn:stein_operator}) is called a Stein characterisation \citep{anastasiou_stein}.
+%\end{definition}
+
+\renewcommand{\thetheorem}{2.5}
+\begin{example}
+\label{example:2_6}
+\emph{(Stein operator for the standard normal distribution)}$\newline$
+Recall that Stein's lemma (Lemma \ref{lemma:steins_lemma}) for the standard normal distribution states that $\mathbb{E}\left[Z f(Z)\right] = \mathbb{E}\left[f'(Z) \right]$ for all absolutely continuous functions $f$ if and only if $Z \sim\mathcal{N}(0, 1)$. This implies that:
+\begin{equation*}
+\mathbb{E}\left[f'(Z) - Z f(Z) \right] = 0 \hspace{0.1cm} \forall f \in \mathcal{C}^1(\mathbb{R}) \iff Z \sim \mathcal{N}(0,1) \enspace.
+\end{equation*}
+This gives rise to the following Stein operator for characterising the standard normal distribution with probability density function $\phi(z)$:
+\begin{equation*}
+\mathcal{T}_{\phi}f(z) = f'(z) - z f(z)
+\end{equation*}
+with the corresponding Stein class given by $\mathcal{F}(\mathcal{T}_{\phi}) = \mathcal{C}^1(\mathbb{R})$, the space of continuous, real-valued functions with a continuous first derivative. In Section \ref{section:2_stein_discrepancy}, we will show that the Stein operator for the standard normal distribution is an example of a \textbf{Langevin-Stein} operator.
+\end{example}
+
+%\subparagraph*{Methods to construct Stein operators}
+%
+%\textcolor{red}{TODO: Discuss methods to construct Stein operators - Density method by Stein, Generator method by Barbour and Gotze, orthogonal polynomial method by Diaconis and Zabell}
+
+\subsection*{Step 2: Stein Equation}
+
+Given a Stein operator (and corresponding Stein class) for the target distribution $P$, the second step in Stein's method involves the so-called \textit{Stein equation}, defined below.
+
+\renewcommand{\thetheorem}{2.6}
+\begin{definition}
+\emph{(Stein equation)}$\newline$
+Given a Stein operator $\mathcal{T}_p$ and corresponding Stein class $\mathcal{F}(\mathcal{T}_p)$, the Stein equation is given by \citet{gaunt_algebra_stein} as:
+\begin{equation}
+\label{eqn:stein_equation}
+\mathcal{T}_p f_h(x) = h(x) - \mathbb{E}_{Y \sim P}\left[h(Y)\right] 
+\end{equation}
+where $h \in \mathcal{H}$ is a bounded test function and $f_h \in \mathcal{F}(\mathcal{T}_p)$ is the solution we seek. Here, $\mathcal{H}$ is a class of test functions as in Definition \ref{defn:ipm}.
+\end{definition}
+%\textcolor{red}{TODO: say more about the class of functions $\mathcal{H}$ above and the range/domain of functions $h \in \mathcal{H}$.}
+
+The second step in Stein's method requires proving that a solution $f_h \in \mathcal{F}(\mathcal{T}_p)$ exists for every (bounded) test function $h \in \mathcal{H}$ \citep{gorham_sample_quality}.
+
+\textbf{Remark}: Bounding the $\mathcal{H}$-dependent IPM using Stein's method requires that a solution to Stein's equation exists for every $h \in \mathcal{H}$. Though a derivation is beyond the scope of this report, \citet{ley_steins_method} and \citet{mijoule_stein_2019} show that, if the Stein operator $\mathcal{T}_p$ is chosen appropriately, then a well-defined solution $f_h \in \mathcal{F}(\mathcal{T}_p)$ to Stein's equation exists for every bounded, continuous test function $h \in \mathcal{H}$. 
+\renewcommand{\thetheorem}{2.7}
+\begin{example}
+\label{example:2_8}
+\emph{(Stein equation for the standard normal distribution)}$\newline$
+Suppose we are given an arbitrary random variable $X \sim Q$ and we want to determine if $X$ is (approximately) standard normally distributed, i.e. $X \sim \mathcal{N}(0,1)$. Recall from Example \ref{example:2_6} that the Stein operator characterising the standard normal distribution is given by $\mathcal{T}_{\phi}f(x) = f'(x) - xf(x)$. Hence, the Stein equation may be given by:
+\begin{equation*}
+f_h'(x) - xf_h(x) =  h(x) - \mathbb{E}_{Y \sim \mathcal{N}(0,1)}\left[h(Y) \right] \enspace.
+\end{equation*}
+Replacing the quantity $x$ with the random variable $X$ and taking expectations with respect to $X \sim Q$ yields:
+\begin{equation*}
+\mathbb{E}_{X \sim Q}\left[f_h'(X) - X f_h(X) \right] = \mathbb{E}_{X \sim Q}\left[h(X) \right] - \mathbb{E}_{Y \sim \mathcal{N}(0,1)}\left[h(Y) \right] \enspace.
+\end{equation*}
+If we assume that $Q = \mathcal{N}(0,1)$, and that $X$ and $Y$ are i.i.d, we arrive at:
+\begin{equation*}
+\mathbb{E}_{X \sim \mathcal{N}(0, 1)}\left[f_h'(X) - X f_h(X) \right] = 0 \enspace,
+\end{equation*}
+which is exactly the result given in Stein's lemma (Lemma \ref{lemma:steins_lemma}). 
+\end{example}
+
+Example \ref{example:2_8} demonstrates how Stein's method can be used to compare an arbitrary distribution $Q$ to the standard normal target distribution $P = \mathcal{N}(0,1)$.
+
+%\renewcommand{\thetheorem}{2.8}
+%\begin{example}
+%\emph{(Stein equation for the standard normal distribution)} \footnote{This is a rather contrived example since we are in essence proving that a normally distributed random variable is normally distributed. However, the example is only meant to serve as an illustration of the idea underlying the Stein equation.}$\newline$
+%Suppose we are given an arbitrary random variable $X \sim P$ and we want to determine if $X$ is (approximately) normally distributed. Recall from Example \ref{example:stein_operator} that the Stein operator characterising the standard normal distribution is given by $\mathcal{T}f(x) = f'(x) - xf(x)$. Hence, the Stein equation may be given by
+%\begin{align*}
+%&\mathcal{T}f(x) :=f'(x) - xf(x) =  h(x) - \mathbb{E}_{Y \sim P}\left[h(Y) \right] \\
+%& \implies \mathbb{E}_{X \sim \mathcal{N}(0,1)}\left[f'(X) - X f(X) \right] = \mathbb{E}_{X \sim \mathcal{N}(0,1)}\left[h(X) \right] - \mathbb{E}_{Y \sim P}\left[h(Y) \right]
+%\end{align*}
+%Note that, if we assume that $P = \mathcal{N}(0,1)$ we arrive at
+%$$\mathbb{E}_{X \sim \mathcal{N}(0, 1)}\left[f'(X) - X f(X) \right] = 0$$
+%which is exactly the result given in Stein's lemma (Lemma \ref{lemma:steins_lemma}).
+%\end{example}
+
+\subsection*{Step 3: Obtaining bounds}
+
+The final step in Stein's method involves bounding the reference IPM, $d_{\mathcal{H}}(Q, P)$. We now assume that a solution $f_h \in \mathcal{F}(\mathcal{T}_p)$ to Stein's equation - see Equation (\ref{eqn:stein_equation}) - exists for every test function $h \in \mathcal{H}$. Let $\mathfrak{F} \subseteq \mathcal{F}(\mathcal{T}_p)$ denote the space of solutions to Stein's equation, i.e. $\mathfrak{F} = \{f_h \in \mathcal{F}(\mathcal{T}_p)| f_h \text{ is a solution to Stein's equation}\}$. If we replace the quantity $x$ in Equation (\ref{eqn:stein_equation}) with the random variable $X$ and take expectations with respect to the distribution $Q$, we arrive at:
+\begin{equation*}
+\mathbb{E}_{X \sim Q}\left[\mathcal{T}_p f_h(X) \right] = \mathbb{E}_{X \sim Q}\left[h(X) \right] - \mathbb{E}_{Y \sim P}\left[h(Y) \right] \enspace .
+\end{equation*}
+This then allows us to rewrite the IPM in Equation (\ref{eqn:ipm}) as follows:
+\begin{align*}
+d_{\mathcal{H}}(Q, P) &= \underset{h \in \mathcal{H}}{\sup}\big|\mathbb{E}_{X \sim Q}\left[h(X)\right] - \mathbb{E}_{Y \sim P}\left[h(Y)\right] \big|\\
+&= \underset{f_h \in \mathfrak{F}}{\sup} \left|\mathbb{E}_{X \sim Q} \left[\mathcal{T}_p f_h(X) \right] \right|\\
+& \leq \underset{f_h \in \mathcal{F}(\mathcal{T}_p)}{\sup}\big|\mathbb{E}_{X \sim Q}\left[\mathcal{T}_p f_h(X) \right] \big| \enspace. \tag{2.5}\label{eqn:stein_bound}
+\end{align*}
+
+If we further assume that the class of functions $\mathfrak{F}$ is closed under negation, i.e. $f \in \mathfrak{F} \implies -f \in \mathfrak{F}$, then we can ignore the absolute value above (this is also true for $\mathcal{H}$ and $\mathcal{F}(\mathcal{T}_p)$).
+%If we replace the quantity $x$ in Equation (\ref{eqn:stein_equation}) with the random variable $X \sim P$ and take expectations, we arrive at
+%$$\mathbb{E}_{X \sim P} \left[\mathcal{T}_p f_h(X) \right] = \mathbb{E}_{X \sim P} \left[ h(X)\right] - \mathbb{E}_{Y \sim Q}\left[h(Y) \right]$$
+%This then allows us to rewrite the IPM as
+%\begin{align*}
+%d_{\mathcal{H}}(P, Q) &= \underset{h \in \mathcal{H}}{\sup} \left|\mathbb{E}_{X \sim P}\left[h(X)\right] - \mathbb{E}_{Y \sim Q}\left[h(Y) \right]\right|\\
+%&= \underset{f_h \in \mathcal{F}(\mathcal{T}_p)}{\sup} \left|\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f_h(X)\right] \right| \tag{2.5}\label{eqn:stein_bound}
+%\end{align*}
+
+In the following section, we will show that the final quantity in Equation (\ref{eqn:stein_bound}) gives rise to a so-called \textit{Stein discrepancy}, which is lower-bounded by the reference IPM, $d_{\mathcal{H}}(Q, P)$.
+
+The final step in Stein's method then involves lower-bounding the penultimate quanity in Equation (\ref{eqn:stein_bound}), i.e. lower-bounding $\sup_{f_h \in \mathfrak{F}} \left|\mathbb{E}_{X \sim Q} \left[\mathcal{T}_p f_h(X) \right] \right|$. One possible approach for obtaining such bounds is the coupling technique by \citet{reinert_couplings}. See \citet{bonis_normal_bounds}, for example, for bounding the 2-Wasserstein distance between an arbitrary distribution $Q$, and the multivariate normal distribution.
+
+\textbf{Remark}: Stein's method is useful for bounding reference IPMs since it is generally easier to obtain bounds on the penultimate quantity in Equation (\ref{eqn:stein_bound}) than for the IPM itself. This is, in part, due to the fact that the penultimate quantity in Equation (\ref{eqn:stein_bound}) does not require explicit integration under the target distribution $P$ \citep{gorham_sample_quality}. This is especially useful when $P$ is a complex distribution that cannot be evaluated in closed form. 
+
+%\textbf{Remark}: Stein's method is useful for bounding reference IPMs since it is generally easier to obtain bounds on the final quantity in Equation (\ref{eqn:stein_bound}) than for the IPM itself. This is, in part, due to the fact that Equation (\ref{eqn:stein_bound}) does not require explicit integration under the target distribution $P$ \citep{gorham_sample_quality}. This is especially useful when $P$ is a complex distribution that cannot be evaluated in closed form. 
+
+
+%===========================================================================================
+% ---------------------------------------- 		STEIN DISCREPANCY		----------------------------------------
+\section{Stein Discrepancy}
+\label{section:2_stein_discrepancy}
+
+In the previous section, we demonstrated how Stein's method facilitates distributional comparisons by simplifying the task of bounding the distance between distributions, where the measure of distance is given by a predetermined IPM. In this section, we show that Stein's method gives rise to a new measure of distance between two distributions that does not involve a reference IPM. Given a distribution $Q$ that we wish to compare to an arbitrary target distribution $P$, both supported on a measurable space $(\Omega, \mathcal{X})$, where $\mathcal{X} \subseteq \mathbb{R}^d$, the so-called \textit{Stein discrepancy} directly quantifies the similarity or dissimilarity between $Q$ and $P$.
+
+Before we discuss the Stein discrepancy measure, we first provide a motivation for discrepancy measures in the context of goodness-of-fit (GOF) tests.
+% and provide a brief overview of the Kullback-Leibler (KL) divergence, which will play an important role in SVGD.
+
+
+% In this section, we show that Stein's method gives rise to a discrepancy measure that can be used to quantify the similarity or dissimilarity between two distributions $P$ and $Q$ supported on a measurable space $(\Omega, \mathcal{X}\subseteq \mathbb{R}^d)$, without having to specify a reference IPM.
+
+%distance between two distributions without having to specify a reference IPM. The resulting distance measure is the so-called \textit{Stein discrepancy}, which can be used 
+
+%In this section, we discuss the so-called Stein discrepancy for quantifying the similarity or dissimilarity between two distributions $P$ and $Q$ supported on a measurable space $\mathcal{X} \subseteq \mathbb{R}^d$. Before doing so, we first provide a motivation for discrepancy measures in the context of goodness-of-fit (GOF) tests and provide a brief overview of the Kullback-Leibler (KL) divergence, which will play an important role in SVGD.
+
+\subsection{Preliminaries}
+
+\paragraph*{Goodness-of-fit tests}
+
+In general, GOF tests refer to statistical procedures used to assess whether a given sample of data follows some hypothesised distribution: given an independent and identically distributed (i.i.d) sample of observed data $\{x_i\}_{i=1}^n$ from an unknown distribution $Q$ with probability density/mass function $q(x)$, we would like to test whether the data could have plausibly arisen from some hypothesised/target distribution $P$ with probability density/mass function $p(x)$. This is formally expressed by the following hypothesis test:
+\renewcommand{\theequation}{2.6}
+\begin{equation}
+\label{eqn:gof_test}
+H_0: p = q \enspace \equiv \enspace H_0: \{x_i\}_{i=1}^n \overset{i.i.d}{\sim} p(x) \enspace.
+\end{equation}
+
+Traditional GOF testing procedures such as the $\mathcal{X}^2$ test are often limited in flexibility due to stringent assumptions on the distributions $P$ and $Q$ \footnote{For example, the $\mathcal{X}^2$ test is restricted to univariate distributions.} \citep[see,][chap. 9]{rice_textbook}. A more flexible approach to conduct GOF tests would be to consider some measure of similarity or dissimilarity between the distributions $P$ and $Q$. This is where the notion of discrepancy measures comes into play. In general, a discrepancy measure $\mathbb{D}(q || p)$ is a non-negative functional that quantifies the similarity/dissimilarity between two distributions, $P$ and $Q$, with the following property:
+\renewcommand{\theequation}{2.7}
+\begin{equation}
+\mathbb{D}(q||p) = 0 \iff p = q \enspace.
+\end{equation}
+
+%A natural approach for conducting such GOF tests is to consider some measure of the similarity or dissimilarity between the distributions. This is where the notion of discrepancy measures come into play. In general, a discrepancy measure $\mathbb{D}(p || q)$ is a non-negative functional that quantifies the similarity/dissimilarity between the two distributions $P$ and $Q$ with the following property
+%\renewcommand{\theequation}{2.7}
+%\begin{equation}
+%\mathbb{D}(p||q) \ge 0, \hspace{0.2cm}\mathbb{D}(p||q) = 0 \iff p = q
+%\end{equation}
+
+Given a discrepancy measure $\mathbb{D}$, we can conduct the GOF test in Equation (\ref{eqn:gof_test}) by considering the deviation of $\mathbb{D}(q||p)$ from zero \footnote{This would only be possible if we had explicit access to the distribution $Q$, which is rarely the case. Instead, we require a notion of discrepancy between a sample $\{x_i\} \sim q(x)$ and the target distribution.}. If we find that $\mathbb{D}(q||p)$ is significantly different from zero (at some significance level $\alpha$), we reject the null hypothesis and conclude that $p \not=q$ \footnote{There are some technicalities that we do not discuss here. See \citet{liu_ksd} for a goodness-of-fit testing procedure based on kernelised Stein discrepancy, which may potentially be generalised to other discrepancy measures.}.
+%\footnote{For brevity, we defer a technical treatment of GOF tests using discrepancy measures to the appendix \textcolor{red}{TODO}.}.
+
+%\textbf{Remark}: Our discussion of discrepancy measures in the context of GOF tests may be slightly misleading in the sense that it suggests that all GOF tests are performed using discrepancy measures. This is not the case, and many GOF test procedures exist that do not rely on a discrepancy measure, such as permutation tests and visual methods such as quantile-quantile (QQ) plots \citep[e.g. see][chap. 9]{rice_textbook}.
+
+%\paragraph*{Kullback-Leibler Divergence}
+
+%\textcolor{red}{TODO}
+
+\subsection{Development of Stein Discrepancy}
+
+This section constructs a Stein discrepancy measure based on the so-called \textit{Langevin-Stein operator} developed by \citet{gorham_sample_quality_2015} using the generator approach by \citet{barbour_generator} as the infinitesimal generator of the Langevin diffusion \citep{gorham_sample_quality}. 
+\renewcommand{\thetheorem}{2.8}
+\begin{definition}
+\label{defn:ls_operator}
+\emph{(Langevin-Stein operator)}$\newline$
+The Langevin-Stein operator for a distribution $P$ with continuous density function $p$ is given by:
+\renewcommand{\theequation}{2.8}
+\begin{equation}
+\label{eqn:ls_operator}
+\mathcal{T}_p f(x) = s_p(x) f(x)^T + \nabla_x f(x) \enspace,
+\end{equation}
+where $s_p:\mathcal{X} \rightarrow \mathbb{R}^d$ is the Stein score function defined by $s_p(x) := \nabla_x \log p(x)$, and $f:\mathcal{X} \rightarrow \mathbb{R}^{d'}$ is a continuously differentiable vector-valued function of the form $f(x) = \begin{bmatrix}f_1(x) & f_2(x) & \dots & f_{d'}(x) \end{bmatrix}^T$. Here, $\nabla f$ and $\mathcal{T}_p f$ are $d \times d'$ vector-valued functions \footnote{In the case of a scalar-valued function $f: \mathcal{X} \rightarrow \mathbb{R}$, the Langevin-Stein operator is given by $\mathcal{T}_p f(x) = s_p(x) f(x) + \nabla_x f(x)$. Here, $\nabla f$ and $\mathcal{T}_p f$ are $d \times 1$ vector-valued functions.}. 
+\end{definition}
+
+%\begin{example}
+%As pointed out in Example \ref{example:2_6}, the Stein operator for the standard normal distribution is a \textbf{Langevin-Stein} operator. 
+%\begin{align*}
+%\mathcal{T}_{\phi}f(x) &= \nabla_x \log \phi(x) f(x) + \nabla_x f(x)\\
+%&= \frac{\nabla_x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x)\\
+%&= \frac{-x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x)\\
+%&= \nabla_x f(x) - x f(x)
+%\end{align*}
+%\end{example}
+\renewcommand{\thetheorem}{2.9}
+\begin{example}
+As pointed out in Example \ref{example:2_6}, the Stein operator for the standard normal distribution is a \textbf{Langevin-Stein} operator. This can easily be seen by writing:
+\begin{equation*}
+\mathcal{T}_{\phi}f(z)  = \frac{\nabla_z \phi(z)}{\phi(z)}f(z) + \nabla_z f(z) = \frac{-z \phi(z)}{\phi(z)}f(z) + \nabla_z f(z) = \nabla_z f(z) - z f(z)
+\end{equation*}
+%\begin{equation*}
+%\mathcal{T}_{\phi}f(x) = \nabla_x \log \phi(x) f(x) + \nabla_x f(x) = \frac{\nabla_x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x) = \frac{-x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x) = \nabla_x f(x) - x f(x)
+%\end{equation*}
+Here we have that $z \in \mathbb{R}$ and hence the gradient $\nabla_z f(z)$ is replaced by the derivative $f'(z)$, which then yields the Stein operator for the standard normal distribution as given in Example \ref{example:2_6}.
+%\begin{align*}
+%\mathcal{T}_{\phi}f(x) &= \nabla_x \log \phi(x) f(x) + \nabla_x f(x)\\
+%&= \frac{\nabla_x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x)\\
+%&= \frac{-x \phi(x)}{\phi(x)}f(x) + \nabla_x f(x)\\
+%&= \nabla_x f(x) - x f(x)
+%\end{align*}
+\end{example}
+
+%\renewcommand{\thetheorem}{2.9}
+%\begin{definition}
+%\emph{(Langevin-Stein operator)}$\newline$
+%The Langevin-Stein operator for a distribution $P$ with continuous density function $p$ is given by
+%\renewcommand{\theequation}{2.8}
+%\begin{equation}
+%\mathcal{T}_p f(x) = s_p(x) f(x) + \nabla_x f(x)
+%\end{equation}
+%where $s_p(x) := \nabla_x \log p(x)$ is the score function and $f:\mathcal{X} \rightarrow \mathbb{R}$ is a continuously differentiable scalar-valued function. Note that, here $s_p(x)$ and $\mathcal{T}_p f(x)$ are $d \times 1$ vector-valued functions mapping from $\mathcal{X} \rightarrow \mathbb{R}^d$. In the case where $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$ is a vector-valued function $f(x) = \begin{bmatrix}f_1(x) & f_2(x) & \dots & f_{d'}(x) \end{bmatrix}^T$ then $\mathcal{T}_p f(x)$ is a $d \times d'$ matrix-valued function mapping from $\mathcal{X} \rightarrow \mathbb{R}^d \times \mathbb{R}^{d'}$ and is given by
+%\renewcommand{\theequation}{2.9}
+%\begin{equation}
+%\mathcal{T}_p f(x) = s_p(x) f(x)^T + \nabla_x f(x)
+%\end{equation}
+%\end{definition}
+
+\renewcommand{\thetheorem}{2.10}
+\begin{lemma}
+\label{lemma:2_10}
+\emph{(Score function)}$\newline$
+Let $P$ be a distribution with continuous density function $p$. The score function $s_p(x) = \nabla_x \log p(x)$ is independent of the normalisation constant of $p$. I.e. let $p(x) = \frac{1}{Z}\tilde{p}(x)$ where $Z$ denotes the normalisation constant, then we have that $s_p = s_{\tilde{p}}$.
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+%$$s_p(x) = \nabla_x \log p(x) = \frac{\nabla_x p(x)}{p(x)}= \frac{\nabla_x \frac{1}{Z}\tilde{p}(x)}{\frac{1}{Z}\tilde{p}(x)}= \frac{\nabla_x \tilde{p}(x)}{\tilde{p}(x)}= s_{\tilde{p}}(x)$$ \qedhere
+\end{proof}
+\end{lemma}
+
+The fact that the score function $s_p(x)$ is independent of the normalisation constant of $p$ is an extremely important and useful result since it is often the case in machine learning problems that we only have access to an unnormalised target density. As we will show, this result enables the computation of kernelised Stein discrepancy and the implementation of Stein variational gradient descent for unnormalised target densities. 
+%\textcolor{red}{TODO: consider saying something about score-matching methods in ML, and why they are useful.}
+
+We now formally define the Stein class corresponding to the Langevin-Stein operator in Definition \ref{defn:langevin_stein_class}, which is taken from \citet{liu_ksd}.
+
+\renewcommand{\thetheorem}{2.11}
+\begin{definition}
+\label{defn:langevin_stein_class}
+\emph{(Langevin-Stein Class)}$\newline$
+A scalar-valued function $f: \mathcal{X} \rightarrow \mathbb{R}$ is said to be in the \textbf{Langevin-Stein class} of a distribution $P$ with density $p$ if $f$ is continuously differentiable and satisfies the following:
+\renewcommand{\theequation}{2.9}
+\begin{equation}
+\int_{x \in \mathcal{X}} \nabla_x \left[f(x)p(x) \right]dx = 0 \enspace.
+\end{equation}
+A vector-valued function $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$ of the form $f(x) = \begin{bmatrix}f_1(x) & f_2(x) & \dots & f_{d'}(x) \end{bmatrix}^T$ is said to be in the Langevin-Stein class of $P$ if each component function $f_i$ is in the Langevin-Stein class of $P$.
+\end{definition}
+
+\renewcommand{\thetheorem}{2.12}
+\begin{corollary}
+\label{corollary:2_13}
+Definition \ref{defn:langevin_stein_class} of the Langevin-Stein class coincides with the general definition of a Stein class in Definition \ref{defn:stein_operator1} when using the Langevin-Stein operator. I.e. $\mathbb{E}_{X \sim P} \left[\mathcal{T}_p f(X) \right] = 0 \iff \int_{x \in \mathcal{X}} \nabla_x \left[ f(x)p(x)\right]dx = 0$ when $\mathcal{T}_p$ is the Langevin-Stein operator.
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+\end{proof}
+\end{corollary}
+
+We are now in a position to discuss the so-called \textit{Stein identity}, which forms the basis for the Stein discrepancy measure (see \citet{stein_exchangeable_2004} and \citet{chen_steins_method}, for example, for more information).
+\renewcommand{\thetheorem}{2.13}
+\begin{lemma}
+\label{lemma:stein_identity}
+\emph{(Stein's identity)}$\newline$
+Let $P$ be a distribution with a continuous, differentiable density $p$, and let $\mathcal{T}_p$ be its associated Langevin-Stein operator. Then, for any vector-valued function $f \in \mathcal{F}(\mathcal{T}_p)$ in the Langevin-Stein class of $P$, we have that \footnote{In the case of scalar-valued functions $f \in \mathcal{F}(\mathcal{T}_p)$, a similar results to Equation (\ref{eqn:stein_identity}) holds by omitting the transpose on $f$.}:
+\renewcommand{\theequation}{2.10}
+\begin{equation}
+\label{eqn:stein_identity}
+\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X)\right] := \mathbb{E}_{X \sim P}\left[s_p(X) f(X)^T + \nabla_X f(X)\right] = 0 \enspace.
+\end{equation}
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+\end{proof}
+\end{lemma}
+
+\textbf{Remark}: Stein's identity (Lemma \ref{lemma:stein_identity}) is a generalisation of Stein's lemma (Lemma \ref{lemma:steins_lemma}) to distributions beyond the standard normal distribution.
+
+\renewcommand{\thetheorem}{2.14}
+\begin{corollary}
+\label{corollary:stein_identity}
+\citep{ley_swan_density}$\newline$
+Let $P$, $p$, and $\mathcal{T}_p$ be defined as in Lemma \ref{lemma:stein_identity}. Furthermore, let $Q \not= P$ be a distribution supported on $\mathcal{X}$ with continuous, differentiable density $q(x)$, and suppose that Stein's identity holds for $Q$ with Langevin-Stein operator $\mathcal{T}_q$, i.e. $\mathbb{E}_{X \sim Q}\left[\mathcal{T}_q f(X)\right] = 0$ for all functions $f$ in the Langevin-Stein class of $Q$. Furthermore, let $f:\mathcal{X} \rightarrow \mathbb{R}^{d'}$ be a vector-valued function in the Langevin-Stein class of $P$. If we consider Stein's identity in Equation (\ref{eqn:stein_identity}) when taking expectations with respect to $Q$, we can write: \footnote{In the case of a scalar-valued function $f: \mathcal{X} \rightarrow \mathbb{R}$, a similar result to Equation (\ref{eqn:stein_identity_q_vector}) holds by simply omitting the transpose.}
+\renewcommand{\theequation}{2.11}
+\begin{equation}
+\label{eqn:stein_identity_q_vector}
+\mathbb{E}_{X \sim Q}\left[\mathcal{T}_p f(X)\right] = \mathbb{E}_{X \sim Q}\left[\left(s_p(X) - s_q(X) \right)f(X)^T\right] \enspace.
+\end{equation}
+%If $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$ is a vector-valued function in the Stein class of $P$, we can write
+%\renewcommand{\theequation}{2.13}
+%\begin{equation}
+%\label{eqn:stein_identity_q_vector}
+%\mathbb{E}_q\left[\mathcal{T}_p f(x)\right] = \mathbb{E}_q\left[\left(s_p(x) - s_q(x) \right)f(x)^T\right]
+%\end{equation}
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+\end{proof}
+\end{corollary}
+
+\renewcommand{\thetheorem}{2.15}
+\begin{theorem}
+\label{thm:toward_stein_discrepancy}
+\emph{(Toward Stein discrepancy)}$\newline$
+Consider the same setting as in Corollary \ref{corollary:stein_identity}. If $P \not= Q$ then there must exist a function $f$ such that the quantity in Equation (\ref{eqn:stein_identity_q_vector}) is non-zero. I.e.,
+\renewcommand{\theequation}{2.12}
+\begin{equation}
+P \not= Q \implies \exists f \enspace\text{s.t. }\enspace \mathbb{E}_{X \sim Q}\left[\mathcal{T}_p f(X)\right] \not=0 \enspace.
+\end{equation}
+\begin{proof}
+See Appendix \ref{appendix:proofs}.
+%\emph{(by contradiction)}
+%\begin{align*}
+%&\mathbb{E}_q[\mathcal{T}_p f(x)] = 0 \\
+%\iff & \mathbb{E}_q[\left(s_p(x) - s_q(x)\right)f(x)] = 0 \quad \text{(by Corollary \ref{corollary:stein_identity})}\\
+%\iff & s_p(x) - s_q(x) = 0 \quad \text{(assuming $f \not= 0$ a.e)}\\
+%\iff & \int_{x \in \mathcal{X}} \left[\nabla_x \log p(x) - \nabla \log q(x) \right]dx = 0\\
+%\iff & \int_{x \in \mathcal{X}} \nabla_x \cdot \left[\log p(x) - \log q(x) \right]dx \quad \text{(by the divergence theorem)}\\
+%\iff & \int_{x \in \mathcal{X}} \nabla_x \log \frac{p(x)}{q(x)}dx = 0 \\
+%\iff & \log \frac{p(x)}{q(x)} = 0\color{red}{*}\\
+%\iff & \frac{p(x)}{q(x)} = 1 \\
+%\iff & p(x) = q(x)
+%\end{align*}
+%\text{This contradicts the assumption that $P \not= Q$}. 
+\end{proof}
+\end{theorem}
+
+Theorem \ref{thm:toward_stein_discrepancy} suggests that we may be able to compare two distributions by considering the amount by which $\mathbb{E}_{X \sim Q} \left[\mathcal{T}_p f(X) \right]$ deviates from zero. Since this quantity depends on the choice of function $f$, it is natural to seek the function $f$ that yields the ``maximum violation of Stein's identity" \citep{liu_wild_vi}. This gives rise to the notion of a Stein discrepancy.
+\renewcommand{\thetheorem}{2.16}
+\begin{definition}
+\label{defn:stein_discrepancy}
+\emph{(Stein discrepancy)}$\newline$
+Let $P$ and $Q$ be distributions with continuous, differentiable density functions $p$ and $q$ respectively. Let $\mathcal{T}_p$ be the Langevin-Stein operator characterising the distribution $P$, and let $\mathcal{F}_q$ be a class of continuously differentiable vector-valued functions that satisfy Stein's identity in Equation (\ref{eqn:stein_identity}). The Stein discrepancy from $q$ to $p$ with respect to $\mathcal{F}_q$ is defined by \citet{liu_svgd} as: \footnote{This form of Stein discrepancy is the square of the typical definition given by e.g. \citet{gorham_sample_quality}. We use the squared definition since it is more closely related to the definition of kernelised Stein discrepancy in Equation (\ref{eqn:ksd1}).}
+\renewcommand{\theequation}{2.13}
+\begin{equation}
+\label{eqn:2_13}
+\mathbb{D}_{\mathrm{Stein}}(q, p; \mathcal{F}_q) := \underset{f \in \mathcal{F}_q}{\sup}\mathbb{E}_{X \sim Q} \left[\mathrm{trace}\left(\mathcal{T}_p f(X)  \right)\right]^2 = \underset{f \in \mathcal{F}_q}{\sup} \mathbb{E}_{X \sim Q}\left[\left(s_p(X) - s_q(X) \right)^T f(X) \right]^2 \enspace.
+\end{equation}
+%\textcolor{red}{TODO: why taking square}
+\end{definition}
+%\renewcommand{\thetheorem}{2.16}
+%\begin{definition}
+%\label{defn:stein_discrepancy}
+%\emph{(Stein Discrepancy)}$\newline$
+%Let $P$ and $Q$ be distributions with continuous, differentiable density functions $p$ and $q$ respectively. Let $\mathcal{T}_p$ be the Langevin-Stein operator characterising the distribution $P$, and let $\mathcal{F}_q$ be a class of continuously differentiable (smooth) scalar-valued functions that satisfy Stein's identity \ref{lemma:stein_identity}. The Stein discrepancy \citep{liu_ksd} is defined as 
+%\renewcommand{\theequation}{2.15}
+%\begin{equation}
+%\mathbb{D}_{\text{Stein}}(q, p) := \underset{f \in \mathcal{F}_q}{\sup} \mathbb{E}_q \left[\mathcal{T}_p f(x) \right] = \underset{f \in \mathcal{F}_q}{\sup} \mathbb{E}_q \left[\left(s_p(x) - s_q(x) \right)^T f(x) \right]^2
+%\end{equation}
+%If $\mathcal{F}_q$ is a class of smooth vector-valued functions $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$, then $\mathcal{T}_p f(x)$ is a $d \times d'$ matrix-valued function, and the Stein discrepancy \citep{liu_ksd} can be defined in terms of the matrix trace
+%\renewcommand{\theequation}{2.16}
+%\begin{equation}
+%\mathbb{D}_{\text{Stein}}(q, p) := \underset{f \in \mathcal{F}_q}{\sup}\mathbb{E}_q \left[\mathrm{trace}\left(\mathcal{T}_p f(x)  \right)\right] = \underset{f \in \mathcal{F}_q}{\sup} \mathbb{E}_q \left[\left(s_p(x) - s_q(x) \right)^T f(x) \right]^2
+%\end{equation}
+%\end{definition}
+
+\textbf{Remark}: The class of functions $\mathcal{F}_q$ in Definition \ref{defn:stein_discrepancy} should be chosen to be rich enough such that the resulting Stein discrepancy is a valid discrepancy measure, i.e. so that $\mathbb{D}_{\text{Stein}}(q, p; \mathcal{F}_q) > 0$ whenever $p \not=q$ \citep{liu_ksd}. However, the function class should also be chosen such that $\mathbb{D}_{\mathrm{Stein}}(q, p; \mathcal{F}_q)$ is computationally tractable \footnote{These desiderata are closely related to those in variational inference where we seek a class of distributions $\mathcal{Q}$ that is rich enough to enable accurate approximation of a target distribution $P$, but not too rich such that the variational optimisation is intractable.}.
+% \textcolor{red}{connection to class of distributions $\mathcal{Q}$ in VI.}
+
+Given a sufficiently rich class of functions $\mathcal{F}_q$, the GOF test in Equation (\ref{eqn:gof_test}) reduces to testing $H_0: \mathbb{D}_{\mathrm{Stein}}(q, p; \mathcal{F}_q) = 0$ \footnote{This would again only be possible if we had explicit access to the true distribution $q(x)$, which is rarely the case. Here we require a notion of discrepancy between a sample $\{x_i\} \sim q(x)$ and the target distribution, i.e. $\mathbb{D}(\{x_i\}||p)$.}. However, there are two caveats to this approach that limit its use in practice: firstly, we have to explicitly specify the function class $\mathcal{F}_q$ over which the optimisation is performed, and secondly, computing the Stein discrepancy may still be computationally intractable. In the following section, we discuss the particular choice of taking $\mathcal{F}_q$ to be the unit ball in a reproducing kernel Hilbert space. This gives rise to the \textit{kernelised Stein discrepancy} proposed independently by \citet{liu_ksd} and \citet{chwialkowski_ksd}.
+
+
+%Given a sufficiently rich class of functions $\mathcal{F}_q$, we can use the Stein discrepancy $\mathbb{D}_{\text{Stein}}(q,p)$ to conduct the GOF test in Equation (\ref{eqn:gof_test}) by considering the amount by which $\mathbb{D}_{\text{Stein}}(q, p)$ deviates from zero. That is, the GOF test in Equation (\ref{eqn:gof_test}) is equivalent to testing $H_0: \mathbb{D}_{\text{Stein}}(q, p) = 0$. However, there are two caveats to this approach that limit its use in practical applications: firstly, we have to explicitly specify the function class $\mathcal{F}_q$ over which the optimisation is performed  and, secondly, computing the Stein discrepancy may still be computationally intractable (or too expensive for practical purposes). In the following section, we discuss the particular choice of taking $\mathcal{F}_q$ to be a (unit ball of) reproducing kernel Hilbert space, which gives rise to the so-called kernelised Stein discrepancy proposed independently by \citet{liu_ksd} and \citet{chwialkowski_ksd}.
+%\textcolor{red}{TODO: research approaches other than taking a RKHS}
+
+%===========================================================================================
+% ---------------------------------------- 	KERNELISED STEIN DISCREPANCY 	--------------------------------------
+
+\section{Kernelised Stein Discrepancy}
+\label{section:2_ksd}
+
+This section discusses the kernelised Stein discrepancy (KSD) \citep{liu_ksd, chwialkowski_ksd}, a tractable form of Stein discrepancy that takes the function class $\mathcal{F}_q$ in Definition \ref{defn:stein_discrepancy} to be the unit ball in a reproducing kernel Hilbert space (RKHS) $\mathcal{H}$. As will soon become apparent, this choice overcomes both limitations discussed at the end of the previous section. Firstly, this choice ensures a sufficiently rich class of functions $\mathcal{F}_q$ since an RKHS is (often) infinite-dimensional \citep{ghojogh_rkhs}; secondly, the resulting Stein discrepancy is computationally tractable, and can be computed in closed form \citep{liu_ksd} via a special kind of ``kernel trick", which we will refer to as a ``Steinalised kernel trick" in connection to the ``Steinalized" kernel \citep{liu_svgd_gf} in Equation (\ref{eqn:stein_kernel}). 
+
+%\textcolor{red}{Question to Steve: is my quotation correct? original quote: "  “Steinalized” positive definite kernel".}
+
+% Firstly, this choice ensures a sufficiently rich class of functions $\mathcal{F}_q$ since the feature space corresponding to the RKHS is (often) infinite dimensional \citep{ghojogh_rkhs} \textcolor{red}{TODO: rather, forms an infinite dimensional basis}
+
+%\footnote{Perhaps more aptly, a ``Steinalised kernel trick" in connection to the ``Steinalised kernel" \citep{liu_svgd_gf} in Equation (\ref{eqn:stein_kernel}).}.
+
+\paragraph*{Notations}
+
+We assume the same notations as \citet{liu_svgd}, which we describe here. Denote by $\mathcal{H}_0$ an RKHS of real-valued functions $f:\mathcal{X} \rightarrow \mathbb{R}$ associated with a positive definite reproducing kernel $k(x, x')$, and let $\langle \cdot, \cdot \rangle_{\mathcal{H}_0}$ denote the corresponding inner product. We extend the RKHS $\mathcal{H}_0$ to an RKHS of vector-valued functions $f: \mathcal{X} \rightarrow \mathbb{R}^{d'}$, which is given by the Cartesian product of $d'$ copies of $\mathcal{H}_0$, i.e. $\mathcal{H} = \mathcal{H}_0 \times \dots \times \mathcal{H}_0$. A function $f(x) = \begin{bmatrix}f_1(x) & f_2(x) & \dots & f_{d'}(x) \end{bmatrix}^T$ is in $\mathcal{H}$ if each $f_i$ is in $\mathcal{H}_0$. The inner product on $\mathcal{H}$ is defined as: $\langle f, g \rangle_{\mathcal{H}} = \sum_{l=1}^{d'} \langle f_l, g_l \rangle_{\mathcal{H}_0}$. Let $\lVert \cdot \rVert_{\mathcal{H}}$ denote the norm induced by this inner product.
+Finally, a (closed) ball of radius $\delta$ in $\mathcal{H}$ is given by $\mathcal{B}_{\mathcal{H}} = \{f \in \mathcal{H}: \lVert f \rVert_{\mathcal{H}}^2 \le \delta\}$.
+%We define the inner product on $\mathcal{H}$ as: 
+
+%\begin{equation*}
+%\langle f, g \rangle_{\mathcal{H}} = \sum_{l=1}^{d'} \langle f_l, g_l \rangle_{\mathcal{H}_0} \enspace,
+%\end{equation*}
+
+
+With these notations at hand, we define the KSD as in \citet{liu_ksd}.
+
+\renewcommand{\thetheorem}{2.17}
+\begin{definition}
+\label{defn:ksd}
+\emph{(Kernelised Stein discrepancy)} \citep{liu_ksd}$\newline$
+Let $P$ and $Q$ be two distributions supported on a measurable space $(\Omega, \mathcal{X}), \mathcal{X} \subseteq \mathbb{R}^d$ with continuously differentiable densities $p(x)$ and $q(x)$ respectively. Furthermore, let $k(x, x')$ be a positive definite kernel. The \textbf{kernelised Stein discrepancy} (KSD) between distributions $P$ and $Q$ is given by: \footnote{See Appendix \ref{appendix:proofs} for a derivation of this form of KSD starting from the general definition of Stein discrepancy in Definition \ref{defn:stein_discrepancy}.}
+\renewcommand{\theequation}{2.14}
+\begin{equation}
+\label{eqn:ksd1}
+\mathbb{S}(q || p) = \mathbb{E}_{X, X' \sim Q}\left[\left(s_p(X) - s_q(X)\right)^T k(X, X') \left(s_p(X') - s_q(X') \right) \right]
+\end{equation}
+%\newenvironment{derivation}
+%{\begin{proof}[Derivation]\setlength{\parskip}{0.5em}}
+%{\end{proof}}
+%\begin{derivation}
+%See Appendix \ref{appendix:proofs}.
+%We can derive this form of KSD starting from the more general form of the Stein discrepancy in Definition \ref{defn:stein_discrepancy} as follows.
+%\begin{align*}
+%\mathbb{S}(q||p) :&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup}\left \{ \mathbb{E}_q\left[\mathcal{T}_p f(x) \right] - \mathbb{E}_q \left[ \mathcal{T}_q f(x) \right] \right \}^2\\
+%&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup} \mathbb{E}_q\left[\mathcal{T}_p f(x) \right]^2 \quad \text{(by Stein's identity for $q$)}\\
+%&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup}\left \langle f(\cdot), \mathbb{E}_q\left[\mathcal{T}_p k(\cdot, x) \right] \right \rangle_{\mathcal{H}}^2\quad \text{(reproducing property)}\\
+%&= \lVert \mathbb{E}_q \left[\mathcal{T}_p k(\cdot, x) \right] \rVert_{\mathcal{H}}^2\\ %explanation needed
+%&= \left \langle \mathbb{E}_{x \sim q} \left[\mathcal{T}_p k(\cdot, x) \right], \mathbb{E}_{x' \sim q} \left[\mathcal{T}_p k(\cdot, x') \right] \right \rangle_{\mathcal{H}}\\
+%&=  \left\langle \mathbb{E}_{x \sim q} \left[\left(s_p(x) - s_q(x)\right) k(\cdot, x) \right], \mathbb{E}_{x' \sim q} \left[\left(s_p(x') - s_q(x')\right) k(\cdot, x') \right] \right\rangle_{\mathcal{H}} \quad \text{(by Corollary \ref{corollary:stein_identity})}\\
+%&= \mathbb{E}_{x, x' \sim q} \left[\left(s_p(x) - s_q(x)\right)^T k(x, x')\left(s_p(x) - s_q(x)\right) \right] \quad \text{(reproducing property)}
+%\end{align*} 
+%\end{derivation}
+\end{definition}
+
+
+%The following definition, taken directly from \citep{liu_ksd}, is required to establish the KSD $\mathbb{S}(q||p)$ as a valid discrepancy measure.
+%
+%\renewcommand{\thetheorem}{2.17}
+%\begin{definition}\citep{liu_ksd}
+%``A kernel $k(x, x')$ is said to be integrally strictly positive [definite], if for any function $g$ that satisfies $0 < ||g||_2^2 < \infty$",
+%\begin{equation*}
+%\int_{\mathcal{X}} g(x)k(x, x')g(x')dxdx' > 0
+%\end{equation*}
+%\end{definition}
+
+\citet[Proposition 3.3]{liu_ksd} show that, provided the kernel $k(x, x')$ is integrally strictly positive definite (see Definition 3.1 of \citet{liu_ksd}), and under some mild assumptions about the densities $p$ and $q$, the KSD is a valid discrepancy measure \footnote{\citet[Theorem 2.2]{chwialkowski_ksd} and \citet[Proposition 1]{barp_min_ksd} also prove that the KSD is a valid discrepancy measure based on different sets of assumptions.}. This means that $\mathbb{S}(q||p) = 0\iff p = q$. \citet{liu_ksd} mention that the assumptions may be violated when $q(x)$ has a heavy tail \footnote{See \citet{south_tail_2022} for a tail condition on $q(x)$ for Stein's identity to hold.}, in which case KSD may fail to be a valid discrepancy measure.
+
+The form of KSD given in Equation (\ref{eqn:ksd1}) is problematic since it requires the calculation of the score function of the unknown distribution $q(x)$, which cannot be computed exactly since we only have access to the distribution via a sample $\{x_i\} \overset{i.i.d}{\sim} q(x)$ \footnote{However, it may be possible to estimate the score function using score matching techniques. See \citet{hyvarinen_score} for a discussion on score function estimation.}.
+%In the following section, $q(x)$ will be an empirical density of a set of particles, for which the score function cannot be computed exactly\footnote{However, it may be possible to estimate the score function. See \citet{hyvarinen_score} for a discussion on score function estimation.}.
+\citet{liu_ksd} overcome this problem by using Theorem 1 of \citet{oates_control_2016} to obtain a form of KSD that only requires the score function of the target distribution $P$. Their result relies on the assumption that the kernel $k(x, x')$ is in the Stein class of $Q$ in the sense given below.
+
+\renewcommand{\thetheorem}{2.18}
+\begin{definition}\citep{liu_ksd}$\newline$
+\label{defn:kernel_stein_class}
+A kernel $k(x,x')$ is said to be in the Stein class of $Q$ if $k(x, x')$ has continuous second-order partial derivatives, and both $k(x, \cdot)$ and $k(\cdot, x)$ are in the Stein class of $Q$ for all fixed $x \in \mathcal{X}$. 
+\end{definition}
+
+\textbf{Remark}: \citet[Proposition 3.5]{liu_ksd} show that if the kernel $k(x, x')$ with corresponding RKHS $\mathcal{H}$ is in the Stein class of $Q$, then so is any $f \in \mathcal{H}$.
+
+\citet[Theorem 3.6]{liu_ksd} show that, if $k(x, x')$ is in the Stein class of $Q$, then the KSD is also given by: \footnote{An equivalent result is given in Theorem 2.1 of \citet{chwialkowski_ksd}.}
+\renewcommand{\theequation}{2.15}
+\begin{equation}
+\label{eqn:liu_ksd}
+\mathbb{S}(q||p) = \mathbb{E}_{X, X' \sim Q}\left[ \kappa_p(X, X') \right] \enspace,
+\end{equation}
+where $\kappa_p(x, x')$ is called a ``Stein kernel" \citep{kanagawa_ksd} and is given by:
+%\renewcommand{\theequation}{2.16}
+\begin{align*}
+\kappa_p(x,x') &= s_p(x)^T k(x, x') s_p(x') + s_p(x)^T \nabla_{x'}k(x,x') \\ 
+&+ \nabla_x k(x, x')^T s_p(x') + \mathrm{trace}\left(\nabla_x \nabla_{x'} k(x, x')\right) \enspace. \tag{2.16}\label{eqn:stein_kernel}
+\end{align*}
+
+\textbf{Remark}: The kernel above, referred to as a ``Steinalized" kernel by \citet{liu_svgd_gf}, can be obtained by applying the Langevin-Stein operator to the kernel $k(x, x')$ twice, once for each argument \citep{liu_ksd}, i.e. $\kappa_p(x, x') = \mathcal{T}_p^{x} \left (\mathcal{T}_p^{x'} k(x, x')\right)$, where $\mathcal{T}_p^{x}$ denotes the Langevin-Stein operator with respect to $x$.
+
+In practice, the KSD in Equation (\ref{eqn:liu_ksd}) can be estimated via a \textit{U-statistic} \citep{hoeffding_u_statistics}:
+
+\renewcommand{\theequation}{2.17}
+\begin{equation}
+\mathbb{\hat{S}}(q||p) = \mathbb{\hat{E}}_{X, X'\sim Q}\left[ \kappa_p(X, X')\right] =\frac{1}{n(n-1)}\sum_{i=1,}^n \sum_{j \not=i} \kappa_p(x_i, x_j)
+\end{equation}
+where $x_i \overset{i.i.d}{\sim}q(x), i=1,2,\dots, n$. 
+
+This is a powerful result that enables non-parametric GOF tests of the hypothesis test in Equation (\ref{eqn:gof_test}) that does not require explicit access to the true distribution $q(x)$, nor does it require samples from the target distribution $p(x)$. Hence, we now have a notion of a discrepancy, $\mathbb{S}(\{x_i\}||p)$, between a sample $\{x_i\} \overset{i.i.d}{\sim} q(x)$ and the target distribution $p(x)$. Consequently, this gives rise to a framework for conducting GOF tests using only a sample $\{x_i\} \overset{i.i.d}{\sim} q(x)$, and the score function, $s_p$, of the target distribution $p(x)$.
+
+
+%Hence, this allows us to conduct GOF tests using only a sample $\{x_i\} \overset{i.i.d}{\sim} q(x)$ and the score function of the target distribution. In this case, it is informative to write the KSD as $\mathbb{S}(\{x_i\} || p)$ since we are comparing a sample $\{x_i\} \overset{i.i.d}{\sim} q(x)$ to the target distribution $p(x)$.
+
+
+%\textcolor{red}{TODO: Illustrate usage of KSD on a simple GOF test}
+
+
+%===========================================================================================
+% ---------------------------------------- 		SVGD 		----------------------------------------
+
+\section{Stein Variational Gradient Descent}
+\label{section:2_svgd}
+
+The previous section discussed how the kernelised Stein discrepancy can be used to quantify the similarity/dissimilarity between two distributions $P$ and $Q$. This section discusses the Stein Variational Gradient Descent (SVGD) algorithm as proposed by \citet{liu_svgd}, which is used to incrementally transform the distribution $Q$ into $P$ by performing functional gradient descent on the Kullback-Leibler (KL) divergence \citep{liu_svgd, han_gf_svgd}. 
+Before presenting the SVGD algorithm, we first provide some background on variational inference, specifically variational inference with smooth transforms. For a detailed discussion on variational inference, see \citet{blei_vi_review}.
+
+\subsection{Background and Notation}
+
+\paragraph*{Notations}
+
+For the remainder of this section, we assume that we are working with a continuous random variable $X$ defined on a measurable space $(\Omega, \mathcal{X}), \mathcal{X} \subseteq \mathbb{R}^d$. Furthermore, we assume that we are interested in approximating an (intractable) target distribution $P$ supported on $\mathcal{X}$ with a continuous, differentiable density $p(x)$. We further assume the same notations as in Section \ref{section:2_ksd}.
+
+\paragraph*{Variational Inference}
+
+Variational inference (VI) refers to approximating a target distribution by finding the $\textit{closest}$ distribution within a predetermined family of distributions. That is, suppose we are tasked with estimating a difficult (or possibly intractable) to compute distribution $p(x)$ - a common case is the posterior distribution in Bayesian inference that (typically) cannot be evaluated in closed form. VI addresses this problem by positing a family of tractable distributions $\mathcal{Q}$ and proceeds to find the distribution $q^* \in \mathcal{Q}$ that provides the best approximation of the target distribution $p$. In this way, VI turns the problem of estimating an arbitrary target distribution into an optimisation problem, where we seek the distribution $q \in \mathcal{Q}$ that minimises (typically) the (reverse) KL divergence to the target distribution. Therefore, VI is typically concerned with the following optimisation problem:
+\begin{align*} 
+q^* = \underset{q \in \mathcal{Q}}{\argmin} \mathbb{D}_{\text{KL}}(q||p) &= \underset{q \in \mathcal{Q}}{\argmin} \mathbb{E}_{X \sim Q} \left[\log q(X) - \log \tilde{p}(X) + \log Z_p\right]\\
+&\equiv \underset{q \in \mathcal{Q}}{\argmin} \mathbb{E}_{X \sim Q} \left[\log q(X) - \log \tilde{p}(X) \right]
+\end{align*}
+where $\tilde{p}$ denotes the unnormalised target density and $Z_p$ its normalisation constant.
+
+It is common to take the variational family $\mathcal{Q}$ to be a parameterised family of distributions, indexed by a parameter (vector) $\theta \in \Theta$, where the parameters $\theta$ are called the free variational parameters. In this case, the variational optimisation problem can be rephrased as finding the optimal parameters $\theta^* \in \Theta$ to provide the best approximation of the target distribution, i.e.
+\begin{equation*}
+\theta^* = \underset{\theta \in \Theta}{\argmin} \mathbb{D}_{\text{KL}}(q(x; \theta) || p(x)) \enspace.
+\end{equation*}
+
+\subparagraph*{Variational Inference with Smooth Transforms}
+
+In VI with smooth transforms, we take the family of distributions $\mathcal{Q}$ to consist of distributions obtained via smooth transforms from a tractable reference distribution. Given a parameterised family of smooth transforms (continuous, differentiable bijections with differentiable inverses) $T_{\psi}: \mathcal{X} \rightarrow \mathcal{X}$, and a tractable reference distribution $q_0(x)$, we take $\mathcal{Q}$ to be the set of distributions of the random variable $Z = T_{\psi}(X)$, with $X \sim q_0(x)$. The distribution of $Z = T_{\psi}(X)$ can be obtained via the change-of-variables formula \citep[e.g.,][]{papamak_vi}:
+\renewcommand{\theequation}{2.18}
+\begin{equation}
+q_{[\psi]}(z) = q_0(T_{\psi}^{-1}(z)) \cdot |\det J_{T_{\psi}^{-1}}(z)|
+\end{equation}
+
+where $J_{T_{\psi}^{-1}}$ denotes the Jacobian of the inverse transform $T_{\psi}^{-1}$.
+%\textcolor{red}{TODO: reformulate this section on VI with smooth transforms.}
+
+\subsection{Stein Variational Gradient Descent}
+
+In this section, we review the original formulation of SVGD, which we refer to as vanilla SVGD.
+SVGD \citep{liu_svgd} is a non-parametric, particle-based variational inference algorithm that enables approximate inference for (or sampling from) intractable target distributions. It works by iteratively transporting a set of particles to approximate the target distribution \citep{liu_svgd, liu_svgd_gf}. In each iteration, the update directions of the particles are chosen to yield the maximum reduction in (reverse) KL divergence between the distribution represented by the particles and the target distribution. As a result, SVGD can be viewed as ``a type of functional gradient descent on the KL divergence" \citep{han_gf_svgd}. 
+
+SVGD starts with an initial set of particles, $\{x_i\}_{i=1}^n$, drawn from an arbitrary, simple initial distribution $q_0(x)$ (e.g. the standard normal distribution), and iteratively updates the positions of the particles via a perturbed identity map \citep{liu_svgd} given by:
+\renewcommand{\theequation}{2.19}
+\begin{equation}
+\label{eqn:phi_optim0}
+T(x) := x + \epsilon \phi(x)
+\end{equation}
+where $\epsilon > 0$ is a step size and $\phi(x)$ is a velocity field that determines the update direction. In each iteration, the velocity field $\phi$ is chosen from a suitable class of continuously differentiable functions $\mathcal{F}$ to maximise the reduction in (reverse) KL divergence\footnote{Technically, the update directions are chosen to maximise the rate of decay in KL divergence.} \citep{liu_svgd_theory, liu_svgd}. Specifically, 
+\renewcommand{\theequation}{2.20}
+\begin{equation}
+\label{eqn:2_20}
+\phi(x) = \underset{\phi \in \mathcal{F}}{\argmax} \left \{- \frac{d}{d \epsilon} \mathbb{D}_{\text{KL}}(q_{[\epsilon \phi]} || p) \big|_{\epsilon=0} \right \}
+\end{equation}
+%\begin{equation}
+%\phi(x) = \underset{\phi \in \mathcal{F}}{\argmax} \left \{- \frac{d}{d \epsilon} \mathbb{D}_{\text{KL}}(q_{[T]} || p) \big|_{\epsilon=0} \right \}
+%\end{equation}
+where $q_{[\epsilon \phi]}$ denotes the density function represented by the updated particles, $x' = x + \epsilon \phi(x)$, with $x \sim q(x)$ \footnote{If $|\epsilon|$ is sufficiently small such that the perturbed identity map is invertible \citep{liu_svgd}, $q_{[\epsilon \phi]}$ can be obtained via the change-of-variables formula.}. 
+
+%This update direction resembles the update direction in regular gradient descent methods where the objective function is given by the rate of decay in KL divergence.
+
+\citet{liu_svgd_moment} decompose the KL divergence as:
+\begin{equation*}
+\mathbb{D}_{\text{KL}}(q_{[\epsilon \phi]}||p) = \mathbb{D}_{\text{KL}}(q||p) - \epsilon \mathbb{E}_{X \sim Q}\left[\mathrm{trace}(\mathcal{T}_p \phi(X))\right] + O(\epsilon^2) \enspace.
+\end{equation*}
+Given this decomposition of the KL divergence, it is straightforward to arrive at the relationship between the derivative of the KL divergence and the Langevin-Stein operator as given by Theorem 3.1 of \citet{liu_svgd}:
+\renewcommand{\theequation}{2.21}
+\begin{equation}
+- \frac{d}{d \epsilon} \mathbb{D}_{\text{KL}}(q_{[\epsilon \phi]} || p)\big|_{\epsilon=0} = \mathbb{E}_{X \sim Q}\left[\mathrm{trace}\left(\mathcal{T}_p \phi(X) \right)\right] \enspace.
+\end{equation}
+In this way, the functional optimisation problem in Equation (\ref{eqn:2_20}) can be rewritten as:
+\begin{equation*}
+\phi(x) = \underset{\phi \in \mathcal{F}}{\argmax} \left \{\mathbb{E}_{X \sim Q} \left[\mathrm{trace}(\mathcal{T}_p \phi(X))\right] \right\} 
+\end{equation*}
+where the maximum reduction in the (reverse) KL divergence can now be related to the Stein discrepancy of Equation (\ref{eqn:2_13}) via:
+\begin{equation*}
+\underset{\phi \in \mathcal{F}}{\max} \left \{- \frac{d}{d \epsilon} \mathbb{D}_{\text{KL}}(q_{[\epsilon \phi]} || p) \big|_{\epsilon=0} \right \} = \sqrt{\mathbb{D}_{\text{Stein}}(q, p; \mathcal{F})} \enspace.
+\end{equation*}
+
+Unfortunately, this approach suffers from the same limitations as the Stein discrepancy discussed in Section \ref{section:2_stein_discrepancy}. To overcome these limitations, \citet{liu_svgd} once again take $\mathcal{F}$ to be the closed ball in an RKHS $\mathcal{H}$ corresponding to a positive definite kernel $k(x, x')$, given by $\mathcal{B} = \{\phi \in \mathcal{H}: \lVert \phi \rVert_{\mathcal{H}}^2 \le \mathbb{S}(q||p)\}$, similar to how KSD overcomes the limitations of Stein discrepancy, but using a different radius for the closed ball $\mathcal{B}$. In this case, \citet[][Lemma 3.2]{liu_svgd} show that the optimal update directions can be computed in closed form by:
+\renewcommand{\theequation}{2.22}
+\begin{equation}
+\label{eqn:2_22}
+\phi^*(\cdot) = \mathbb{E}_{X \sim Q}\left[\mathcal{T}_p k(X, \cdot) \right] = \mathbb{E}_{X \sim Q} \left[k(X, \cdot) \nabla_X \log p(X) + \nabla_X k(X, \cdot)\right]
+\end{equation}
+for which the (squared) decrease in (reverse) KL divergence is exactly equal to the KSD,
+\renewcommand{\theequation}{2.23}
+\begin{equation}
+- \frac{d}{d \epsilon} \mathbb{D}_{\text{KL}}(q_{[\epsilon \phi^*]} || p)\big|_{\epsilon=0} = \sqrt{\mathbb{S}(q || p)} \enspace.
+\end{equation}
+In practice, empirical averaging is used to estimate the expectation under the current distribution $Q$, with density function $q$, represented by the current particles \citep{liu_svgd_theory}, which then yields an estimate of the optimal update direction given by:
+\begin{align*}
+\hat{\phi}^*(\cdot) &=  \mathbb{\hat{E}}_{X \sim Q} \left[k(X, \cdot)s_p(X) + \nabla_X k(X, \cdot)\right]\\
+&= \frac{1}{n} \sum_{j=1}^n \left[k(x_j, \cdot) \nabla_{x_j} \log p(x_j) + \nabla_{x_j} k(x_j, \cdot) \right ] \tag{2.24} \label{eqn:svgd_phi_optimal}
+\end{align*}
+where $x_i \overset{i.i.d}{\sim} q(x), i=1,2,\dots,n$.
+
+Given the optimal update direction above, SVGD iteratively updates the positions of the particles $\{x_i\}_{i=1}^n$ via the update equation (obtained by setting $\phi(x)$ in Equation (\ref{eqn:phi_optim0}) according to Equation (\ref{eqn:svgd_phi_optimal})) given by:
+\renewcommand{\theequation}{2.25}
+\begin{equation}
+\label{eqn:svgd_update}
+x_i \leftarrow x_i + \frac{\epsilon}{n} \sum_{j=1}^n \underbrace{k(x_j, x_i) \nabla_{x_j} \log p(x_j)}_{\text{driving force}} + \underbrace{\nabla_{x_j} k(x_j, x_i)}_{\text{repulsive force}},\quad i=1,2,\dots,n.
+\end{equation}
+
+\textbf{Remark}: The update rule in Equation (\ref{eqn:svgd_update}) contains two opposing terms: the first term is a kernel-weighted gradient of the log density of the target distribution, which serves as a \textbf{driving force} \citep[e.g.,][]{liu_svgd, zhou_aump_svgd} that pushes the particles towards high-density regions of the target distribution, with information sharing across the particles via the weighting by kernel similarities; the second term is the gradient of the kernel function, which serves as a \textbf{repulsive force} \citep[e.g.,][]{liu_svgd, ba_variance_collapse} that pushes the particles away from each other, thereby encouraging diversity in the particle positions to prevent the particles from collapsing into a single mode of the target density. Furthermore, the relative magnitude of the deterministic repulsive force helps to ensure that the particle diversity accurately reflects the uncertainty (i.e., the variance) in the target distribution.
+
+The vanilla SVGD algorithm is summarised in Algorithm \ref{alg:svgd}.
+
+%\begin{algorithm}[ht]
+%\KwIn{Target distribution $p(x)$, set of initial particles $\{x_i^{(0)}\}_{i=1}^n$, and a step size sequence $\{\epsilon_t\}$.}
+%\KwOut{A set of particles $\{x_i\}_{i=1}^n$ that approximates the target distribution.}
+%\textbf{Require:} Score function of the target distribution, $s_p(x) = \nabla_x \log p(x)$ and a positive definite kernel $k(x, x')$\\
+%\For{iteration t }{
+%	\For{\text{particle} $i = 1$ \textbf{to} $n$}{
+%		Compute optimal update direction using Equation (\ref{eqn:svgd_phi_optimal}): $$\hat{\phi}^*(x_i) = \frac{1}{n} \sum_{j=1}^n \nabla_{x_j} \log p(x_j) k(x_j, x_i) + \nabla_{x_j}k(x_j, x_i)$$\\
+%		Update particle position using Equation (\ref{eqn:svgd_update}): $$x_i \gets x_i + \epsilon_t \hat{\phi}^*(x_i)$$
+%	}
+%}
+%\Return{Final particles $\{x_i\}_{i=1}^n$}
+%\caption{\label{alg:svgd} Stein Variational Gradient Descent}
+%\end{algorithm}
+
+\paragraph*{Illustrative example of SVGD}
+
+To illustrate the usage of vanilla SVGD, we consider a simple sampling experiment where the goal is to sample from a bivariate, two-component Gaussian mixture model (GMM) target distribution given by:
+\begin{equation*}
+p(x) = 0.5 \mathcal{N}\left(x;\begin{bmatrix}0 \\ 0 \end{bmatrix}, \begin{bmatrix}0.52 & 0.92 \\ 0.92 & 3.05 \end{bmatrix} \right) +  0.5 \mathcal{N}\left(x;\begin{bmatrix}0 \\ 0 \end{bmatrix}, \begin{bmatrix}0.52 & 0.92 \\ 0.92 & 3.05 \end{bmatrix}^{-1}\right) \enspace.
+\end{equation*}
+We sample from this target distribution using several sampling algorithms: the Random-Walk Metropolis-Hastings (RW-MH) sampler, the Hamiltonian/Hybrid Monte Carlo \citep{duane_hmc} (HMC) sampler, the No U-Turn Sampler \citep{hoffman_nuts} (NUTS), and finally SVGD \footnote{We implement the RW-MH, HMC and SVGD samplers from scratch, while we use the TensorFlow Probability package \citep{tensorflow} to implement NUTS.}. We visualise the sampled points in Figure \ref{fig:svgd_gmm} by plotting them on the density contours of the GMM. Furthermore, we estimate the KSD between each of the samples and the target distribution and summarise the results in Table \ref{tab:sample_ksd}. The results indicate that SVGD yields the most accurate sample from the GMM since it (i) provides the best coverage of the target probability space as evident in Figure \ref{fig:svgd_gmm}, and (ii) has the smallest estimated KSD as evident in Table \ref{tab:sample_ksd} \footnote{Note that, although KSD is non-negative in theory, errors introduced through numerical approximation sometimes results in negative estimates.}.
+
+\begin{figure}[h!]
+% Details on hyperparameters for samplers:
+	% Metropolis-Hastings: proposal standard deviation = 1.3, burn-in = 100 (acceptance ratio = 0.465)
+	% Hamiltonian MC: num leapfrog steps = 7, step size = 2.2e-1, burn-in=100 (acceptance ratio=0.85)
+	% NUTS: num leapfrog steps = 10, step size = 5e-2, burn-in=100
+	% SVGD: Initial particles sampled from N(0, 2*I), Adam optimizer with initial learning rate = 1e-2, RBF kernel with median heuristic bandwidth; run for 500 iterations
+	\centering
+	\subfloat[RW-MH]{
+		\includegraphics[height=0.25\columnwidth, width=0.25\columnwidth, keepaspectratio]{mh_sample_final.png}
+	}
+	\subfloat[HMC]{
+		\includegraphics[height=0.25\columnwidth, width=0.25\columnwidth, keepaspectratio]{hmc_sample_final.png}
+	}
+	\subfloat[NUTS]{
+		\includegraphics[height=0.25\columnwidth, width=0.25\columnwidth, keepaspectratio]{nuts_sample_final.png}
+	}
+	\subfloat[SVGD]{
+		\includegraphics[height=0.25\columnwidth, width=0.25\columnwidth, keepaspectratio]{svgd_sample_final.png}
+	}
+	\caption{\label{fig:svgd_gmm} Sampling from a bivariate GMM. We sample from the target distribution using four samplers: random-walk MH (first), HMC (second), NUTS (third), and SVGD (fourth). We plot the samples on the density contours of the GMM. For SVGD, we use an RBF kernel with median heuristic bandwidth - see Equation \ref{eqn:median_heuristic}.}
+\end{figure}
+
+
+\begin{table}[h!]
+\centering
+	\begin{tabular}{cc}
+	\toprule
+	\text{Algorithm} & \text{Estimated KSD}\\
+	\hline
+	\text{MH} & 0.1401\\
+	\text{HMC} & 0.3233\\
+	\text{NUTS} & 0.0453\\
+	\text{SVGD} & -0.0713\\
+	\bottomrule
+	\end{tabular}
+\caption{\label{tab:sample_ksd} Estimated kernelised Stein discrepancy for each of the samples.}
+\end{table}
+
+
+%===========================================================================================
+% ---------------------------------------- 		CONVERGENCE ANALYSIS 	----------------------------------------
+
+\section{Convergence Properties of SVGD}
+\label{section:2_convergence}
+
+Since the SVGD algorithm was first proposed, there have been several works aimed at a convergence analysis of SVGD in the mean-field limit \footnote{The mean-field limit refers to the infinite-particle limit under a fixed dimensionality.} \citep[e.g.,][]{liu_svgd_gf, lu_svgd_scaling, gorham_stochastic_sd, salim_convergence}. In this section, we provide a high-level overview of the ideas used by \citet{liu_svgd_gf} to prove that, in the mean-field limit, particles evolving according to SVGD dynamics converge to the target distribution, provided that the step sizes $\epsilon_t$ are decreased sufficiently fast and that the initial distribution $q_0$ has finite (reverse) KL divergence with the target distribution \citep{liu_svgd_gf}.
+
+\paragraph*{Notations} Let $P$ be the target probability measure supported on measurable space $\mathcal{X} \subseteq \mathbb{R}^d$ with a continuous, differentiable density function $p(x)$. Furthermore, let $\hat{Q}_t^n(dx) = \frac{1}{n}\sum_{i=1}^n \delta(x - x_i^{(t)})dx$ denote the empirical measure of the $n$ particles $\{x_i^{(t)}\}_{i=1}^n$ at the $t^\text{th}$ iteration of SVGD. \citet{liu_svgd_gf} defines the map $\Phi_p: Q \mapsto T_{\#}Q$, which maps the measure $Q$ to the pushforward measure $T_{\#}Q$ through the map in Equation (\ref{eqn:phi_optim0}) with the optimal perturbation direction $\phi^*$ given in Equation (\ref{eqn:2_22}). This map characterises the evolution of the empirical measure of the particles in the sense that $\hat{Q}_{t+1}^n = \Phi_p(\hat{Q}_t^n) \hspace{0.1cm}\forall t \in \mathbb{N}$ \citep{liu_svgd_gf}.
+
+\citet{liu_svgd_gf} first considers the many-particle asymptotic behaviour of SVGD under the assumption that the limit initial measure $\hat{Q}_0^n$ weakly converges to some measure $Q_0^\infty$ as $n \rightarrow \infty$ \footnote{As discussed by \citet{liu_svgd_gf}, this can easily be achieved by taking the initial particles $\{x_i^{(0)}\}$ to be an i.i.d sample from distribution $q_0$ corresponding to the measure $Q_0^{\infty}$.}. Assuming that $\hat{Q}_0^n \rightharpoonup Q_0^\infty$ as $n \rightarrow \infty$, and assuming an appropriate Lipschitz condition on the map $\Phi_p$, \citet{liu_svgd_gf} shows that $\text{BL}(\hat{Q}^n_t, Q_t^\infty) \rightarrow 0$ as $n \rightarrow \infty \hspace{0.1cm} \forall t \in \mathbb{N}$, where $\text{BL}(\cdot, \cdot)$ denotes the bounded Lipschitz (BL) metric. Since the BL metric is known to metricise weak convergence \citep[e.g.,][]{bl_weak_convergence, lunde_bl_weak}, this result implies that $\hat{Q}_t^n \rightharpoonup Q_t^\infty \hspace{0.1cm} \forall t \in \mathbb{N}$. Now it only remains to show that $Q_t^{\infty} \rightharpoonup P$ as $t \rightarrow \infty$. Intuitively, since the SVGD algorithm is guaranteed to monotonically decrease the KL divergence between the particle distribution and the target distribution in each iteration \citep[][Theorem 3.3(2)]{liu_svgd_gf}, and since the KL divergence metricises weak convergence \citep[e.g.,][]{walker_kl_weak,osti_kl_weak}, the limit empirical measure $Q_t^\infty$ weakly converges to the target measure $P$ as $t \rightarrow \infty$. Therefore, \citet{liu_svgd_gf} concludes that $\hat{Q}_t^n \rightharpoonup P$ as $n \rightarrow \infty, t \rightarrow \infty$, thereby establishing convergence of particles evolving according to SVGD dynamics to the target distribution.
+
+Although convergence is guaranteed in the infinite-time limit when using infinitely many particles, convergence is not guaranteed in practice due to limited time and memory. Furthermore, there is limited work on proving convergence (and establishing explicit convergence rates) of SVGD in the finite-particle and finite-time regime, with the exception of \citet{shi_finite_convergence} who derive explicit convergence rates under stringent assumptions on the target distribution.
+
+
+
+
+%===========================================================================================
+% ---------------------------------------- 		CONCLUSION	----------------------------------------
+
+\section{Conclusion}
+\label{section:conclusion}
+
+This chapter developed the vanilla SVGD algorithm, starting from Stein's method for bounding reference IPMs in Section \ref{section:2_steins_method}, moving to Stein discrepancy in Section \ref{section:2_stein_discrepancy}, and its kernelised variant, KSD, in Section \ref{section:2_ksd}. Section \ref{section:2_svgd} presented the vanilla SVGD algorithm along with a simple sampling application thereof. The sampling experiment demonstrated the effectiveness of SVGD, where it was able to outperform three well-known MCMC algorithms in terms of both sampling accuracy and speed. Finally, Section \ref{section:2_convergence} provided a brief overview of the convergence properties of SVGD as given by \citet{liu_svgd_gf}, who showed that the empirical measure of particles evolving according to SVGD dynamics weakly converges to the target measure.
+
+The following chapter discusses the major advantages and limitations of vanilla SVGD, aiming to shed further light on the practical applicability of SVGD by considering scenarios in which SVGD may fail to accurately approximate the target distribution.
+
+
+
+
+

@@ -1,0 +1,22 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+\section{Summary}
+
+This report provided a comprehensive survey of Stein Variational Gradient Descent (SVGD). Chapter \ref{chap:svgd} presented the statistical development of SVGD and demonstrated its effectiveness on a simple sampling problem, where SVGD was able to outperform three well-known MCMC sampling algorithms. Chapter \ref{chap:limitations} discussed the major advantages and limitations of SVGD, and discussed several extensions of vanilla SVGD that may alleviate some of its major limitations such as the variance/mode collapse phenomenon and sensitivity to choice of kernel function. Chapter \ref{chap:svpg} presented the Stein Variational Policy Gradient (SVPG) method, together with a novel variant thereof called the Multiple-Kernel Stein Variational Policy Gradient (MK-SVPG) method. Experiments were conducted on several gym problems which demonstrated the effectiveness of SVPG and MK-SVPG compared to REINFORCE.
+
+\section{Conclusion}
+
+In conclusion, SVGD shows significant promise as a general-purpose tool for accurate approximation of complex target distributions. The non-parametric nature of SVGD makes it very flexible and amenable to a wide range of challenging tasks, and potentially allows SVGD to yield more accurate approximations than traditional variational inference methods. Furthermore, the deterministic, gradient-based updates in SVGD potentially allows SVGD to converge much faster than Markov chain Monte Carlo methods.
+
+SVPG also shows significant promise in reinforcement learning for solving complex problems where exploration is critical. The use of entropy-regularisation and a kernel repulsive force allows SVPG to more effectively explore the environment compared to traditional policy gradient methods.
+
+\section{Future Work}
+
+The main direction for future research in SVGD is to analyse the convergence properties and establish explicit convergence rates in the finite-particle and finite-time regime.
+
+There are two main directions of future research for SVPG: firstly, a more comprehensive comparative analysis of SVPG to other existing methods on complex tasks is needed; secondly, it may be valuable to investigate using existing extensions of SVGD in the SVPG method.
+
+
+
+

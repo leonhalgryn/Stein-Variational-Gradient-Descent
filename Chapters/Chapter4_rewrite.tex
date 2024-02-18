@@ -1,0 +1,352 @@
+\chapter{SVGD in Reinforcement learning via the Stein Variational Policy Gradient Method}
+\label{chap:svpg}
+
+\section{Introduction}
+
+Reinforcement Learning (RL) has emerged as a powerful paradigm for agents to learn to make sequential decisions by interacting with an environment. The goal of RL can be succinctly summarised as learning a policy, denoted by $\pi(a|s)$, which informs an agent of promising actions to take in a given state; usually, promise is defined in terms of maximising an expected future reward signal.
+
+This chapter discusses a particular application of SVGD in RL known as the Stein Variational Policy Gradient (SVPG) method \citep{liu_svpg}. We first provide a brief background on function approximation and policy gradient methods in RL, and discuss the motivation for using SVGD in this context.
+%, which is used for learning a set of diverse policies.
+
+
+
+\section{Background and Preliminaries}
+
+This section provides a brief overview of background information relevant to SVPG.
+
+\paragraph*{Notations} We denote the action and state space of the environment by $\mathcal{A}$ and $\mathcal{S}$, respectively. The reward function is denoted by $r(s_t, a_t)$, which specifies the numerical reward received by an agent taking action $a_t$ in state $s_t$ at time $t$. 
+
+%Finally, the discount factor to discount the value of future rewards is denoted by $\gamma$.
+
+\subsection*{Function Approximation}
+
+Tabular methods in RL, such as tabular Q-learning and SARSA, have been widely used in practice. However, when the action and/or state space is continuous or has a large dimensionality, tabular methods become infeasible \citep{sb}. Hence, function approximation has been introduced to model the action-value function $Q(s, a)$\footnote{In some cases, the state-value function, $V(s)$, is used instead.} by a parameterised function $f_{\theta}(s, a)$ \citep[e.g.,][]{long_function_approx}. The parameters $\theta$ are optimised to approximate the optimal value function, $Q_*(s, a)$. This circumvents the problem of having to store extremely large tables in memory, as well as the problem of encountering states that have not yet been visited (and hence do not have value estimates stored in the table).
+
+\subsection*{Policy Gradient Methods}
+
+In value-based RL methods, the aim is to learn (or approximate) the optimal value function $Q_*(s, a)$, which implicitly specifies the optimal policy by $\pi_*(a|s) = \argmax_{a \in \mathcal{A}} Q_*(s, a) \hspace{0.1cm} \forall s \in \mathcal{S}$. Conversely, policy-based methods aim to learn (or approximate) the optimal policy $\pi_*(a|s)$ directly \citep{mnih_asynchronous}. Policy gradient methods refer to policy-based function approximation methods that assume a parametric form for the policy, $\pi(a|s;\theta)\equiv \pi_{\theta}(a|s)$, and learn the parameters $\theta$ by performing (approximate) gradient ascent on some performance measure, $J(\pi_{\theta}(a|s))$ \citep{sb}. We write $J(\pi_{\theta}(a|s)) \equiv J(\theta)$ to simplify notation. The update rule for the parameters can now be given by:
+\renewcommand{\theequation}{4.1}
+\begin{equation}
+\theta_{t+1} = \theta_t + \epsilon_t \widehat{\nabla_{\theta}J(\theta_t)}\big|_{\theta=\theta_t}
+\end{equation}
+where $\widehat{\nabla_{\theta}J(\theta_t)}$ is an estimate of the true gradient, $\nabla_{\theta}J(\theta_t)$, and $\epsilon_t$ is a step size.
+In the episodic case, the performance measure is given by the value of the start state of the episode \citep{sb}:
+\renewcommand{\theequation}{4.2}
+\begin{equation}
+\label{eqn:4_2}
+J(\theta) = V_{\pi_{\theta}}(s_0) = \sum_{a \in \mathcal{A}} \pi(a|s_0) Q_{\pi_{\theta}}(s_0, a) = \mathbb{E}_{\pi}\left[\sum_{t=0}^{\infty}\gamma^t r(s_t, a_t)\right]
+\end{equation}
+%\begin{equation}
+%\label{eqn:4_2}
+%J(\theta) = V_{\pi_{\theta}}(s_0) = \underset{a \in \mathcal{A}}{\argmax}Q_{\pi_{\theta}}(s_0, a) = \mathbb{E}_{\pi}\left[\sum_{t=0}^{\infty}\gamma^t r(s_t, a_t)\right]
+%\end{equation}
+%\renewcommand{\theequation}{4.2}
+%\begin{equation}
+%J(\theta) = V_{\pi_{\theta}}(s_0) = \mathbb{E}_{\pi}\left[\sum_{t=0}^{\infty}\gamma^t r(s_t, a_t)\right]
+%\end{equation}
+The \textit{policy gradient theorem} \citep{sutton_policy_gradient} provides a closed-form expression for the gradient of the performance measure. In the episodic case, the gradient of Equation (\ref{eqn:4_2}) is given by:
+\renewcommand{\theequation}{4.3}
+\begin{equation}
+\label{eqn:policy_gradient}
+\nabla_{\theta} J(\theta) = \frac{1}{Z}\sum_{s \in \mathcal{S}} d_{\pi_\theta}(s) \sum_{a \in \mathcal{A}} Q_{\pi_{\theta}}(s, a) \nabla_\theta \pi_{\theta}(a|s)
+\end{equation}
+where $d_{\pi_{\theta}}$ denotes the stationary distribution of the Markov chain for $\pi_{\theta}$ and $Z$ is a constant of proportionality that is equal to the average length of an episode in the episodic case, and is equal to one in the continuing case \citep{sb} \footnote{In practice, the constant of proportionality, $Z$, is not important as it can be absorbed into the step size.}.
+
+In practice, the policy gradient in Equation (\ref{eqn:policy_gradient}) can be estimated using either finite difference methods or likelihood ratio-based methods \citep[e.g.,][]{peters_policy_gradients, liu_svpg}. Two popular examples of likelihood ratio-based policy gradient methods are the REINFORCE method \citep{williams_reinforce} and Actor-Critic methods\footnote{For a detailed overview and discussion of policy gradient methods, see the blog post by \citet{weng_pg_blog}.}. The REINFORCE policy gradient estimator for a single rollout trajectory is given by \citet{liu_svpg}:
+\begin{equation*}
+\nabla_{\theta} J(\theta) = \sum_{t=0}^{\infty} \nabla_{\theta} \log \pi_{\theta}(a_t|s_t)G_t
+\end{equation*}
+where $G_t = \sum_{i=0}^{\infty}\gamma^i r(s_{t+1}, a_{t+i})$ is the discounted cumulative return.
+
+%\subsection*{Maximum Entropy RL}
+
+\subsection*{Motivation for SVPG}
+
+Although policy gradient methods have proven useful in practice, they suffer from high variance and insufficient exploration \citep{liu_svpg, cohen_exploration}. This is problematic since exploration is often key to the success of RL algorithms, especially in the context of sparse rewards \citep[see, ][]{weng_exploration}. \citet{liu_svpg} propose using the SVGD algorithm (see Algorithm \ref{alg:svgd}) to improve the exploration of policy gradient methods by training a set of diverse policies $\{\pi_{\theta_i}(a|s)\}_{i=1}^n$. In this approach, the repulsive force term in SVGD - see Equation (\ref{eqn:svgd_update}) - encourages diversity among the particles, which yields improved exploration in parameter space.
+
+\section{Stein Variational Policy Gradient}
+
+SVPG is a policy gradient method that builds on the concept of maximum-entropy RL \citep{liu_svpg} and is fundamentally different from traditional policy gradient methods. In traditional policy gradient methods, the parameters $\theta$ of the policy $\pi_\theta(a|s)$ are treated as fixed parameters and are optimised to maximise the expected return $J(\theta)$. In contrast, SVPG treats the parameters $\theta$ as a random variable and attempts to approximate the distribution $Q$, with density function $q(\theta)$, that maximises the entropy-regularised expected return \citep{liu_svpg} given by:
+\renewcommand{\theequation}{4.4}
+\begin{equation}
+\label{eqn:4_4}
+\tilde{J}(q) = \underset{q}{\max} \left\{\mathbb{E}_{\theta \sim Q}\left[J(\theta)\right] + \alpha \mathbb{H}(q)\right\}
+\end{equation}
+where $\mathbb{H}(q)$ denotes the entropy of the distribution $q(\theta)$ and $\alpha$ can be viewed as a temperature parameter \citep{liu_svpg}. This entropy-regularised optimisation problem ``explicitly encourages exploration in the $\theta$ parameter space according to the principle of maximum entropy''\footnote{For a discussion and analysis of the principle of maximum entropy in RL, see \citet{levine_max_entropy}.} \citep{liu_svpg}. Furthermore, this framework allows one to include prior knowledge in the form of a prior distribution $q_0(\theta)$, which can also be used to provide regularisation \citep{liu_svpg}. In this case, the entropy term $\mathbb{H}(q)$ in Equation (\ref{eqn:4_4}) is replaced by the (reverse) KL divergence between the distribution $q(\theta)$ and the prior $q_0(\theta)$, yielding the optimisation problem given by \citet{liu_svpg}:
+\renewcommand{\theequation}{4.5}
+\begin{equation}
+\tilde{J}(q) = \underset{q}{\max}\left\{\mathbb{E}_{\theta \sim Q}\left[J(\theta)\right] - \alpha \mathbb{D}_{\text{KL}}(q||q_0) \right\} \enspace.
+\end{equation}
+
+The optimal distribution, $q^*(\theta)$, of the above optimisation problem can be derived by setting $\nabla_q \tilde{J}(q) = 0$ and solving for $q$ \citep{liu_svpg}, which yields (see Appendix \ref{appendix:proofs} for the derivation):
+\renewcommand{\theequation}{4.6}
+\begin{equation}
+\label{eqn:optimal_q}
+q^*(\theta) \propto \exp \left(\frac{1}{\alpha}J(\theta) \right)q_0(\theta) \enspace.
+\end{equation}
+%\begin{align*}
+%&\nabla_q \tilde{J}(\theta) = 0\\
+%\iff & \nabla_q \left\{\mathbb{E}_q[J(\theta) - \alpha \mathbb{D}_{\text{KL}}(q||q_0)] \right\} = 0\\
+%\iff & \nabla_q \int_\theta \big\{q(\theta)J(\theta) - \alpha q(\theta) \left[\log q(\theta) - \log q_0(\theta)\right]\big\}d\theta = 0\\
+%\iff & \nabla_q \int_{\theta} \big\{q(\theta)J(\theta) - \alpha q(\theta) \log q(\theta) + \alpha q(\theta) \log q_0(\theta) \big\}d\theta = 0\\
+%\iff & \int_{\theta}\big\{\nabla_q \left[q(\theta) J(\theta)\right] - \alpha \nabla_q\left[ q(\theta) \log q(\theta)\right] + \alpha \nabla_q\left[q(\theta) \log q_0(\theta)\right]\big\}d\theta = 0\\
+%\iff & \int_\theta \left\{J(\theta) - \alpha \left[\log q(\theta) + q(\theta) \frac{\nabla_q q(\theta)}{q(\theta)} \right] + \alpha \log q_0(\theta) \right\}d\theta = 0\\
+%\iff & \int_\theta \big\{J(\theta) - \alpha \log q(\theta) - \alpha + \alpha \log q_0(\theta) \big\}d\theta = 0\\
+%\iff & J(\theta) - \alpha \log q^*(\theta) - \alpha + \alpha \log q_0(\theta) = 0\\
+%\iff & J(\theta) = \alpha \left[\log q^*(\theta) + 1 - \log q_0(\theta) \right]\\
+%\iff & \log q^*(\theta) = \frac{1}{\alpha}J(\theta) + \log q_0(\theta) - 1\\
+%\iff & q^*(\theta) \propto \exp \left(\frac{1}{\alpha}J(\theta) \right)q_0(\theta) \tag{4.6} \label{eqn:optimal_q}
+%\end{align*}
+
+As discussed by \citet{liu_svpg}, the optimal distribution $q^*(\theta)$ above can be viewed as the posterior distribution of the parameters $\theta$ given the likelihood, $\exp \left(\frac{1}{\alpha}J(\theta) \right)$, and prior $q_0(\theta)$. Given this posterior distribution, the SVGD algorithm presented in Chapter \ref{chap:svgd} can be applied directly to approximate this posterior. That is, one initialises a set of particles $\{\theta_i\}_{i=1}^n$, where each particle represents the parameters of a policy function approximation, $\pi_{\theta_i}(a|s)$, and iteratively updates the positions of the particles using the SVGD update equation given by \citet{liu_svpg}:
+\renewcommand{\theequation}{4.7}
+\begin{equation}
+\label{eqn:svpg_update}
+\theta_i \leftarrow \theta_i + \frac{\epsilon}{n}\sum_{j=1}^n \underbrace{k(\theta_j, \theta_i) \nabla_{\theta_j} \left(\frac{1}{\alpha}J(\theta_j) + \log q_0(\theta_j) \right)}_{\text{exploitation}} + \underbrace{\nabla_{\theta_j}k(\theta_j, \theta_i)}_{\text{exploration}}
+\end{equation}
+
+In the update rule in Equation (\ref{eqn:svpg_update}), the gradient $\nabla_{\theta}J(\theta)$ can be computed using any existing policy gradient method such as REINFORCE \citep{williams_reinforce} or the Actor-Critic method along with any of its variants \citep{liu_svpg}.
+
+\textbf{Remark}: The \textbf{driving force} in Equation (\ref{eqn:svgd_update}) now serves as an \textbf{exploitation} term in Equation (\ref{eqn:svpg_update}), and the \textbf{repulsive force} in Equation (\ref{eqn:svgd_update}) now serves as an \textbf{exploration} term in Equation (\ref{eqn:svpg_update}) \citep{liu_svpg}. Furthermore, the exploration-exploitation trade-off in the SVPG algorithm is controlled by the temperature parameter $\alpha$ \citep{liu_svpg}.
+
+\textbf{Remark}: The SVPG algorithm contains three sources of exploration: the first source of exploration arises from the prior regularisation of $q_0(\theta)$, which encourages exploration by the principle of maximum entropy \citep{liu_svpg}; the second source of exploration is the deterministic repulsive force of the SVGD algorithm, which encourages diversity among the particles $\{\theta_i\}_{i=1}^n$; the third source of exploration is quite subtle, and arises from the use of softmax action selection (assuming a discrete action space) when simulating episodes for training. The use of softmax action selection encourages exploration similar to that of $\epsilon$-greedy action-selection approaches.
+
+\subsection*{Variance collapse of SVPG}
+
+
+As discussed in Chapter \ref{chap:limitations}, the major limitation of SVGD is the so-called mode/variance collapse phenomenon. In SVPG, each particle $\theta_i$ represents the parameters of (typically) a neural network policy $\pi_{\theta_i}(a|s)$, which may be very high dimensional. Hence, it may seem reasonable to suspect that the mode/variance collapse phenomenon would be exacerbated in SVPG. However, since the target distribution is non-stationary and changes as more information is gained by the agent(s), the modes of the target distribution are also non-stationary. Hence, SVPG may be less prone to mode/variance collapse than SVGD.
+
+Furthermore, it is important to note that the repulsive force in SVPG serves a distinct purpose compared to SVGD. In SVGD, the ultimate goal is to obtain a representative sample from the posterior distribution, and the repulsive force is used to encourage diversity in the particle positions. In SVPG, the ultimate goal is to obtain an accurate approximation of the optimal policy, $\pi_*(a|s)$, and the repulsive force is used to encourage exploration of the environment. Therefore, it is not cause for concern if the particles experience mode collapse during the later stages of training, so long as the particles adequately explored the environment before collapsing to a mode, and hence are able to collapse to a (near-)optimal mode.
+
+However, mode collapse in the early stages of training is problematic. \citet{liu_svpg} discuss that when the temperature parameter is very small ($\alpha \rightarrow 0$), which is nearly equivalent to a zero repulsive force magnitude, the SVPG algorithm essentially reduces to running $n$ independent policy gradient algorithms for each of the policies $\pi_{\theta_i}(a|s)$. Therefore, it is imperative to ensure that the repulsive force is sufficiently strong during the early stages of training. This can, to some extent, be achieved by carefully annealing the temperature parameter to ensure that the repulsive force dominates during the early stages of training and the driving force dominates during later stages, thereby exploiting the information gained in the early stages of training \citep{liu_svpg}.
+
+%
+%As discussed in Chapter \ref{chap:limitations}, the major limitation of SVGD is the so-called mode/variance collapse phenomenon, which refers to the situation in which the particles collapse to a single mode of the posterior distribution. In SVPG, each particle $\theta_i$ represents the parameters of (typically) a neural network policy $\pi_{\theta_i}(a|s)$, which may be very high dimensional. Hence, at first glance, it may seem reasonable to suspect that the mode/variance collapse phenomenon would be exacerbated in SVPG. However, since the target distribution is non-stationary and changes as more information is gained by the agent(s), the modes of the target distribution are also non-stationary. Hence, it is possible that SVPG is less prone to mode/variance collapse than SVGD. 
+%
+%Furthermore, note that the repulsive force serves a different purpose in SVPG than in SVGD. In SVGD, the goal is to obtain a representative sample of the posterior distribution, and the repulsive force is used to encourage diversity among the particle positions such that the final particles accurately represent the posterior distribution of interest. In contrast, in SVPG the goal is to approximate the optimal policy $\pi_*(a|s)$, and the repulsive force is used to encourage diversity among the particle positions such that the particles effectively explore the environment. Hence, the goal of SVPG is not to obtain a representative sample of the posterior, but rather to obtain a set of (near-)optimal policies (or an ensemble of policies that is near-optimal). Therefore, it is not cause for concern if the SVPG particles experience mode-collapse during the later stages of training, so long as the particles adequately explored the environment before starting to collapse to a mode, and hence are able to collapse to a near-optimal mode.
+%
+%%so long as the particles collapse to a near-optimal mode, and that the particles sufficiently explored the environment before starting to collapse to a mode.
+%However, it is problematic if the particles experience mode collapse during early stages of training. \citet{liu_svpg} discuss that, when the temperature parameter is very small ($\alpha \rightarrow 0$) (which is nearly equivalent to a zero repulsive force magnitude), the SVPG algorithm essentially reduces to running $n$ independent policy gradient algorithms for each of the policies $\pi_{\theta_i}(a|s)$. Hence, it is imperative to ensure that the repulsive force magnitudes are adequately large in early stages of training such that the particles effectively explore the environment. This can, to some extent, be achieved by carefully annealing the temperature parameter, $\alpha_t$, such that the repulsive force dominates during early stages of training thereby allowing the particles to effectively explore the environment \citep{liu_svpg}. In later stages of training, the temperature parameter can be adjusted such that the driving force starts to dominate, thereby exploiting the information learned during early stages of training \citep{liu_svpg}.
+
+
+
+
+%Another limitation faced by SVPG is the issue of \textit{false diversity}, which relates to the fact that parameter diversity does not immediately imply functional diversity. For example, the various policies may have a diverse set of parameters $\{\theta_i\}_{i=1}^n$, but still essentially implement the same function \footnote{\citet{dangelo_stein_nn_ensembles} discuss the issue of \textit{false diversity} in the context of training a neural network ensemble using SVGD.}: even if $\theta_i$ and $\theta_j$ are very different, the policies $\pi_{\theta_i}(a|s)$ and $\pi_{\theta_j}(a|s)$ may be very similar (or even equivalent)  (i.e. $\theta_i \not= \theta_j \not \Rightarrow  \pi_{\theta_i}(a|s) \not = \pi_{\theta_j}(a|s)$). It is an interesting direction for future work to consider using functional kernels in the SVPG algorithm (as done in \citet{dangelo_stein_nn_ensembles} for SVGD) to explicitly encourage diversity among the different policies.
+
+\subsection*{A Novel Variant of Vanilla SVPG}
+
+We propose a simple, novel variant of SVPG to improve upon vanilla SVPG in terms of exploration and sensitivity to the choice of kernel function. 
+
+Specifically, we leverage the idea of using a linear combination of multiple kernels  instead of using a single kernel, as was done by \citet{ai_mk_svgd} for SVGD. \citet{ai_mk_svgd} propose using a linear combination of RBF kernels, each having a fixed (at the start of training) bandwidth. Instead, we propose using a linear combination of RBF kernels, each having a bandwidth proportional to the median heuristic bandwidth, $\sigma_{\mathrm{med}}$, given by:
+\renewcommand{\theequation}{4.10}
+\begin{equation} 
+\label{eqn:median_heuristic}
+\sigma_{\mathrm{med}} = \sqrt{\frac{med^2}{2 \log(n+1)}}
+\end{equation}
+where $med$ denotes the median pairwise distance between particles. That is, we consider using a set of component kernels $\{k_l(\theta, \theta')\}_{l=1}^m$, each having a bandwidth proportional to the median heuristic bandwidth, $\sigma_l \propto \sigma_{\mathrm{med}}$. In this way, the bandwidth of each component kernel adapts to the spread of the current particles. The mixture kernel is then given by:
+\renewcommand{\theequation}{4.11}
+\begin{equation}
+k_{\mathrm{mix}}(\theta, \theta') = \sum_{l=1}^m w_l k_l(\theta, \theta')
+\end{equation}
+where $w_l \in (0, 1)$ denotes the weight of the $l^\text{th}$ component kernel such that $\sum_{l=1}^m w_l = 1$. 
+Given this mixture kernel, the optimal update direction given in Equation (\ref{eqn:svgd_update}) may be computed for each component kernel as follows:
+\renewcommand{\theequation}{4.12}
+\begin{equation}
+\label{eqn:4_12}
+\phi_l^*(\cdot) = \frac{1}{n}\sum_{j=1}^n k_l(\theta_j, \cdot) \nabla_{\theta_j}\left[\frac{1}{\alpha} \cdot J(\theta_j) + \log q_0(\theta_j) \right] + \nabla_{\theta_j}k_l(\theta_j, \cdot) \enspace.
+\end{equation}
+
+Given the optimal update direction for each component kernel, $\phi^*_l(\cdot)$, the optimal update direction can be computed as a linear combination of these optimal directions given by:
+\renewcommand{\theequation}{4.13}
+\begin{equation}
+\label{eqn:4_13}
+\phi_{\mathrm{mix}}^*(\cdot) = \sum_{l=1}^m w_l \phi^*_l(\cdot)
+\end{equation}
+where the weights are given by: \footnote{In our practical experiments, we instead use the Euclidean norm for simplicity.}
+\renewcommand{\theequation}{4.14}
+\begin{equation}
+\label{eqn:4_14}
+w_l= \frac{\lVert \phi_l^*(\cdot) \rVert_{\mathcal{H}}}{\sum_{j=1}^m \lVert \phi_j^*(\cdot) \rVert_{\mathcal{H}}}
+\end{equation}
+where $\lVert \cdot \rVert_{\mathcal{H}}$ denotes the norm induced by the inner product, $\langle \cdot, \cdot \rangle_{\mathcal{H}}$, of the RKHS $\mathcal{H}$ corresponding to the positive definite kernel $k_{\mathrm{mix}}(\cdot, \cdot)$.
+
+The resulting Multiple-Kernel Stein Variational Policy Gradient (MK-SVPG) algorithm is summarised in Algorithm \ref{alg:a_mk_svpg}. 
+
+%\begin{algorithm}[h!]
+%\KwIn{Posterior parameter distribution $q^*(\theta)$, prior distribution $q_0(\theta)$, set of initial particles $\{\theta_i^{(0)}\}_{i=1}^n$ and a step size sequence $\{\epsilon_t\}$.}
+%\KwOut{A set of particles $\{\theta_i\}_{i=1}^n$ that corresponds to a diverse set of policies $\{\pi_{\theta_i}(a|s)\}_{i=1}^n$.}
+%\textbf{Require:} A set of positive definite component kernels $\{k_l(\cdot, \cdot)\}_{l=1}^m$, initial temperature $\alpha_0$ and a decay factor $\delta$.\\
+%\For{iteration t }{
+%	Compute temperature parameter $\alpha_t = \alpha_0(1 - \delta)^t$.\\
+%	\For{\text{particle} $i = 1$ \textbf{to} $n$}{
+%	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+%	Compute optimal update direction using Equation (\ref{eqn:4_12}): $$\phi_l^*(\theta_i) = \frac{1}{n}\sum_{j=1}^n  k_l(\theta_j, \theta_i) \nabla_{\theta_j} \left[\frac{1}{\alpha_t} \cdot J(\theta_j) + \log q_0(\theta_j) \right] + \nabla_{\theta_j}k_l(\theta_j, \theta_i)$$
+%	where $\nabla_{\theta_j}J(\theta_j)$ can be computed using any existing PG method.\\
+%	}
+%	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+%	Compute kernel weight using Equation (\ref{eqn:4_14}): $$w_l = \frac{\lVert \phi_l^*(\cdot) \rVert}{\sum_{k=1}^m \lVert \phi_k^*(\cdot) \rVert}$$
+%	}
+%	Compute overall optimal update direction using Equation (\ref{eqn:4_13}): $$\phi^*(\theta_i) = \sum_{l=1}^m w_l \phi^*_l(\theta_i)$$\\
+%	Update particle position: $$\theta_i \leftarrow \theta_i + \epsilon_t \phi^*(\theta_i)$$
+%	}
+%}
+%\Return{Final particles $\{\theta_i\}_{i=1}^n$}
+%\caption{\label{alg:a_mk_svpg} Mixture-Kernel Stein Variational Policy Gradient.}
+%\end{algorithm}
+
+%In our experiments, we use a simple geometric cooling schedule for the temperature parameter given by $\alpha_t = \alpha_0(1 - \delta)^t$, where $\delta \in (0, 1)$ is a decay factor, and $\alpha_0$ is an initial temperature parameter. To monitor convergence of the algorithm, we suggest using validation episodes rather than the usual condition of $\phi^*(\cdot) = 0$ in SVGD since there may be insufficient information in $J(\theta)$ to accurately estimate the update direction $\phi^*(\cdot)$ (e.g. due to a lack of exploration, especially in early episodes).
+
+%The resulting Mixture-Kernel Stein Variational Policy Gradient (MK-SVPG) algorithm is summarised in Algorithm \ref{alg:a_mk_svpg}. In our experiments, we use a simple geometric cooling schedule for the temperature parameter $\alpha$, i.e. the temperature parameter is computed in each iteration by $\alpha_t = \alpha_0(1 - \delta)^t$, where $\delta \in (0, 1)$ is a decay factor, and $\alpha_0$ is an initial temperature parameter. To monitor convergence of the algorithm, we suggest using validation episodes rather than the usual condition of $\phi^*(\cdot) = 0$ in SVGD since there may be insufficient information in $J(\theta)$ to accurately estimate the update direction $\phi^*(\cdot)$ (e.g. due to a lack of exploration, especially in early episodes).
+
+\section{Experiments}
+
+In this section, we conduct several experiments to illustrate the effectiveness of SVPG. Specifically, we consider two classic control problems in the \texttt{gym} package \citep{openai_gym}: ``Cartpole-v1'' and ``Acrobot-v1''. Furthermore, we also consider the ``LunarLander-v2'' Box2D environment in the \texttt{gym} package \citep{openai_gym}. For each experiment, we implement vanilla SVPG and our variant, MK-SVPG, using the REINFORCE method to calculate policy gradients. Furthermore, we use the REINFORCE algorithm to serve as a baseline for comparison. To allow a fair comparison, we adopt the ``REINFORCE-Independent'' method \citep{liu_svpg} wherein multiple agents are trained independently, each using the original REINFORCE method. 
+
+In all cases, we use $n=16$ policies, a discount rate of $\gamma = 0.99$, and use ADAM \citep{kingma_adam} to set step sizes for gradient descent updates (with initial learning rates of 0.01, 0.001, and 0.001 for CartPole, Acrobot, and LunarLander respectively). Furthermore, for each of the experiments, the policies are parameterised by a neural network with a single hidden layer containing 128 neurons and ReLU activation. For SVPG and MK-SVPG, we follow \citet{liu_svpg} by using an initial temperature of $\alpha_0=10$ and using a flat improper prior given by $\log q_0(\theta) = 1$ in all experiments. Furthermore, in each case, we use a simple geometric cooling schedule for the temperature parameter given by $\alpha_t = \alpha_0(1 - \delta)^t$. For CartPole, we train the agents for 50 episodes using 20 rollout trajectories to calculate the policy gradients. For Acrobot, we train the agents for 100 episodes using 5 rollout trajectories to calculate the policy gradients. For LunarLander, we train the agents for 500 episodes using 10 rollout trajectories to calculate the policy gradients.
+
+After training, we evaluate the policies for each algorithm in three ways: firstly, we evaluate each of the policies independently and report the average performance across policies; secondly, we use the first evaluation method to determine the best-performing policy, and evaluate the performance of this policy; thirdly, we evaluate a naive Bayes ensemble policy wherein actions are selected according to the highest estimated probability across policies. 
+
+The learning curves for the three algorithms on the classic control experiments are given in Figure \ref{fig:learning_curves}, and the average rewards over 100 evaluation episodes are summarised in Table \ref{tab:rl_results}. The learning curves on the LunarLander environment are given in Figure \ref{fig:lunar_lander}, and the average rewards over 100 evaluation episodes are summarised in Table \ref{tab:lunar_lander}.
+
+For the classic control problems, all three algorithms are able to solve the environments. For the CartPole environment, it seems that all three algorithms yield similar performance, as evident in Figure \ref{fig:cartpole_curves}. However, from Figure \ref{fig:acrobot_curves} it is appears that both SVPG and MK-SVPG learn much faster than REINFORCE on the Acrobot problem. For the LunarLander environment, it is evident from Figure \ref{fig:lunar_lander} and Table \ref{tab:lunar_lander} that both SVPG and MK-SVPG are able to solve the environment, whereas REINFORCE cannot. This is likely due to the LunarLander environment having a much sparser reward structure than the classic control environments. The results suggest that, while MK-SVPG does yield better exploration compared to SVPG, it is not clear whether MK-SVPG yields better performance on these tasks. More experiments are needed to determine the relative performance of these two algorithms, especially on more complex environments where exploration is crucial.
+
+\begin{figure}[h!]
+	\centering
+	\subfloat[\label{fig:cartpole_curves} CartPole.]{
+		\includegraphics[height=5cm, width=5cm, keepaspectratio]{cartpole.pdf}
+	}
+	\qquad \quad
+	\subfloat[\label{fig:acrobot_curves} Acrobot.]{
+		\includegraphics[height=5cm, width=5cm, keepaspectratio]{acrobot.pdf}
+	}
+	\caption{\label{fig:learning_curves} Learning curves for the three algorithms on classic control problems: CartPole (left) and Acrobot (right).}
+\end{figure}
+
+
+\begin{table}[h!]
+\parbox{.45\columnwidth}{
+\centering
+\begin{tabular}{cccc}
+    \toprule
+    \multicolumn{4}{c}{\hspace{2.2cm} Rewards} \\
+    \cmidrule{2-4}
+    Algorithm & Average & Best & Ensemble \\
+    \midrule
+    REINFORCE & 476.51 & 500.00 & 500.00 \\
+    SVPG & 473.17 & 500.00 & 500.00 \\
+    MK-SVPG & 415.23 & 500.00 & 500.00 \\
+    \bottomrule
+\end{tabular}
+}
+\hfill
+\parbox{.45\columnwidth}{
+\centering
+\begin{tabular}{cccc}
+    \toprule
+    \multicolumn{4}{c}{\hspace{2.2cm} Rewards} \\
+    \cmidrule{2-4}
+    Algorithm & Average & Best & Ensemble \\
+    \midrule
+    REINFORCE & -320.38 & -81.05 & -500.00 \\
+    SVPG & -196.62 & -84.47 & -455.73 \\
+    MK-SVPG & -291.71 & -79.12 & -86.23 \\
+    \bottomrule
+\end{tabular}
+}
+\caption{\label{tab:rl_results} Average rewards over 100 evaluation episodes for CartPole (left) and Acrobot (right).}
+\end{table}
+
+\begin{figure}[h!]
+  \begin{minipage}{0.5\textwidth}
+    \centering
+    \includegraphics[width=5cm, height=5cm, keepaspectratio]{lunar_lander.pdf}
+    \caption{Learning curves for LunarLander.}
+    \label{fig:lunar_lander}
+  \end{minipage}%
+  \begin{minipage}{0.5\textwidth}
+    \centering
+	\begin{tabular}{cccc}
+	    \toprule
+	    \multicolumn{4}{c}{\hspace{2.2cm} Rewards} \\
+	    \cmidrule{2-4}
+	    Algorithm & Average & Best & Ensemble \\
+	    \midrule
+	    REINFORCE & -45.94 & 80.70 & -27.70 \\
+	    SVPG & 182.78 & 250.50 & 231.43 \\
+	    MK-SVPG & 97.73 & 247.80 & 241.03\\
+	    \bottomrule
+	\end{tabular}
+    \captionof{table}{Average rewards over 100 evaluation episodes for LunarLander.} % <-- Use \captionof for tables
+    \label{tab:lunar_lander}
+  \end{minipage}
+\end{figure}
+
+
+%\begin{figure}[h!]
+%  \begin{minipage}{0.5\textwidth}
+%    \centering
+%    \includegraphics[width=5cm, height=5cm, keepaspectratio]{lunar_lander.pdf}
+%    \caption{Learning curves for LunarLander.}
+%    \label{fig:myfigure}
+%  \end{minipage}%
+%  \begin{minipage}{0.5\textwidth}
+%    \centering
+%	\begin{tabular}{cccc}
+%	    \toprule
+%	    \multicolumn{4}{c}{\hspace{2.2cm} Rewards} \\
+%	    \cmidrule{2-4}
+%	    Algorithm & Average & Best & Ensemble \\
+%	    \midrule
+%	    REINFORCE & -45.94 & 80.70 & -27.70 \\
+%	    SVPG & 182.78 & 250.50 & 231.43 \\
+%	    MK-SVPG & 97.73 & 247.80 & 241.03\\
+%	    \bottomrule
+%	\end{tabular}
+%    \caption{Average rewards over 100 evaluation episodes for LunarLander.}
+%    \label{tab:mytable}
+%  \end{minipage}
+%\end{figure}
+
+%
+%\begin{algorithm}[h!]
+%\KwIn{Posterior parameter distribution $q^*(\theta)$, prior distribution $q_0(\theta)$, set of initial particles $\{\theta_i^{(0)}\}_{i=1}^n$ and a step size sequence $\{\epsilon_t\}$.}
+%\KwOut{A set of particles $\{\theta_i\}_{i=1}^n$ that corresponds to a diverse set of policies $\{\pi_{\theta_i}(a|s)\}_{i=1}^n$.}
+%\textbf{Require:} A set of positive definite component kernels $\{k_l(\cdot, \cdot)\}_{l=1}^m$, initial temperature $\alpha_0$ and a decay factor $\delta$.\\
+%\For{iteration t }{
+%%	Compute annealing parameter $\delta_t = \delta(t)$ using Equation (\ref{eqn:4_9}).\\
+%	Compute temperature parameter $\alpha_t = \alpha_0(1 - \delta)^t$.\\
+%	\For{\text{particle} $i = 1$ \textbf{to} $n$}{
+%	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+%	Compute optimal update direction using Equation (\ref{eqn:4_11}): $$\phi_l^*(\theta_i) = \frac{1}{n}\sum_{j=1}^n  k_l(\theta_j, \theta_i) \nabla_{\theta_j} \left[\frac{1}{\alpha_t} \cdot J(\theta_j) + \log q_0(\theta_j) \right] + \nabla_{\theta_j}k_l(\theta_j, \theta_i)$$
+%	where $\nabla_{\theta_j}J(\theta_j)$ can be computed using any existing PG method.\\
+%	}
+%	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+%	Compute kernel weight using Equation (\ref{eqn:4_13}): $$w_l = \frac{\lVert \phi_l^*(\cdot) \rVert}{\sum_{k=1}^m \lVert \phi_k^*(\cdot) \rVert}$$
+%	}
+%	Compute overall optimal update direction using Equation (\ref{eqn:4_12}): $$\phi^*(\theta_i) = \sum_{l=1}^m w_l \phi^*_l(\theta_i)$$\\
+%	Update particle position: $$\theta_i \leftarrow \theta_i + \epsilon_t \phi^*(\theta_i)$$
+%	}
+%}
+%\Return{Final particles $\{\theta_i\}_{i=1}^n$}
+%\caption{\label{alg:a_mk_svpg} Mixture-Kernel Stein Variational Policy Gradient.}
+%\end{algorithm}
+
+\newpage
+
+\section{Conclusion}
+
+This chapter presented the Stein Variational Policy Gradient (SVPG) \citep{liu_svpg} method and introduced a novel variant thereof, called Multiple-Kernel SVPG, that uses a linear combination of RBF kernels. Furthermore, the effectiveness of both SVPG and MK-SVPG was demonstrated on two classic control problems, CartPole and Acrobot, and one Box2D environment, LunarLander, from the \texttt{gym} package \citep{openai_gym}. The results demonstrate that SVPG and MK-SVPG yield significant improvement over REINFORCE. While our MK-SVPG variant shows promise, more experiments are needed to conclusively determine its performance relative to vanilla SVPG, especially on more complex environments where significant exploration is required.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
