@@ -1,0 +1,497 @@
+\documentclass[11pt,oneside]{report}
+\usepackage[english]{babel}
+\usepackage{usbib}
+\usepackage{url}
+\usepackage[utf8x]{inputenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\graphicspath{{images/}}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage{vmargin}
+\usepackage{subfig}
+%\usepackage{natbib}
+\usepackage{bbm} %
+\usepackage{amssymb} %
+\usepackage{amsmath} %
+\usepackage[ruled,vlined]{algorithm2e} %
+\usepackage{booktabs} %
+\usepackage{caption} %
+\usepackage{tabularx}
+\usepackage{lipsum} %
+%\usepackage{algpseudocode} %
+%\usepackage{algorithmic} %
+\usepackage{graphicx} %
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{setspace}
+%\usepackage{mathbb}
+\usepackage{amsthm}
+\usepackage{hyperref}
+\usepackage{xcolor} %DELETE THIS WHEN FINISHED
+\usepackage{amsfonts}
+\usepackage{textcomp}
+\usepackage{titlesec}
+\usepackage[titletoc]{appendix}
+\usepackage{etoolbox}
+\definecolor{citecolor}{RGB}{0,10,245} % Color citations
+\definecolor{linkcolor}{RGB}{0, 55, 200} % corlor references to e.g., equations
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    citecolor=citecolor,
+    urlcolor=blue
+}
+\newif\ifmodule 
+\newif\ifoneauthor 
+
+
+%% Copyright (C) 20xx by Name Surname
+%%
+%% Currently maintained by CJ van der Merwe (cjvdmerwe@sun.ac.za) and S Lubbe (slubbe@sun.ac.za)
+%%
+%% This file may be distributed and/or modified under the conditions
+%% of the LaTeX Project Public License, either version 1.2 of this
+%% license or (at your option) any later version.  The latest version
+%% of this license is in:
+%% 
+%%    http://www.latex-project.org/lppl.txt
+%% 
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INSERT YOUR THESIS DETAILS HERE %%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\title{Stein Variational Gradient Descent: A Survey}                             % Title
+\author{Leon Halgryn}							        % Author 1
+\newcommand\authorsurname{Halgryn}                              % Author 1 Surname
+\newcommand\authorinitials{L.P.}                                % Author 1 initials
+\newcommand\studentnumber{21946345}                             % Author 1 Student Number
+%\newcommand\studenttwonumber{98765432}                          % Author 2 Student Number
+\newcommand\fulldegree{Master of Science (MSc) Machine Learning and Artificial Intelligence}    % Degree / module name
+\newcommand\supervisor{S. Kroon}                           % Supervisor
+\newcommand\supervisortitle{Prof.}                              % Supervisor Title (Mr., Mrs., Dr., Prof.)
+\newcommand\degreeofconf{A}                                     % Degree of Confidentiality
+\newcommand\yeardate{2023}								        % Year Date
+\newcommand\monthdate{November}                                 % Month Date
+\newcommand\daydate{06}                                         % Day Date
+\newcommand\projecttype{Assignment}                             % Project Type (Thesis, Research assignment)
+\modulefalse                                                    %set to \moduletrue if module assignment                                                                 %and \modulefalse for research assignment
+\oneauthortrue                                                 %set to \oneauthorfalse if two authors,
+                                                                %and  \oneauthortrue for a single author
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% BACKEND LATEX FORMATTING DO NOT EDIT %%%%%%%%%%%%%%%%%%%%%%%%
+\setcounter{secnumdepth}{5}                     
+\renewcommand{\arraystretch}{1.5}
+\makeatletter
+\renewcommand\chapter{\if@openright\cleardoublepage\else\clearpage\fi
+                    \thispagestyle{plain}%
+                    \global\@topnum\z@
+                    \@afterindentfalse
+                    \secdef\@chapter\@schapter}
+\def\@chapter[#1]#2{\ifnum \c@secnumdepth >\m@ne
+                       \if@mainmatter
+                         \refstepcounter{chapter}%
+                         \typeout{\@chapapp\space\thechapter.}%
+                         \addcontentsline{toc}{chapter}%
+                                   {\protect\numberline{\thechapter}\MakeUppercase{#1}}%
+                       \else
+                         \addcontentsline{toc}{chapter}{\MakeUppercase{#1}}%
+                       \fi
+                    \else
+                      \addcontentsline{toc}{chapter}{\MakeUppercase{#1}}%
+                    \fi
+                    \chaptermark{#1}%
+                    \addtocontents{lof}{\protect\addvspace{10\p@}}%
+                    \addtocontents{lot}{\protect\addvspace{10\p@}}%
+                    \if@twocolumn
+                      \@topnewpage[\@makechapterhead{#2}]%
+                    \else
+                      \@makechapterhead{#2}%
+                      \@afterheading
+                    \fi}
+
+\makeatother
+
+\titleformat{\chapter}[display]
+{\bfseries\Large\filcenter}
+{\Large\bfseries\MakeUppercase{\chaptertitlename} \thechapter}
+{-0.01cm}
+{\Large\MakeUppercase}
+
+\titlespacing*{\chapter}
+  {10pt}
+  {-5em}
+  {20pt}
+
+\titleformat{name=\chapter,numberless}
+  {\normalfont \Large \bfseries \center}{}{0.5em}{}
+  
+\titleformat{\section}
+  {\large\bfseries \uppercase}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\itshape}{\thesubsubsection}{1em}{}
+
+\setmarginsrb{2.5cm}{2 cm}{2 cm}{2 cm}{1 cm}{1.5 cm}{0 cm}{1.5 cm}
+
+\linespread{1.5}
+\parindent 0mm
+\parskip 2mm plus 1pt
+\addto\captionsenglish{
+  \renewcommand{\contentsname}
+    {TABLE OF CONTENTS}
+}
+\addto{\captionsenglish}{\renewcommand{\bibname}{REFERENCES}}
+
+\makeatletter
+\let\thetitle\@title
+\let\theauthor\@author
+\let\thedate\@date
+\makeatother
+
+\DeclareMathOperator*{\argmin}{arg\,min} %
+\DeclareMathOperator*{\argmax}{arg\,max} %
+
+\fancyhf{}
+\renewcommand\headrulewidth{0pt}
+\fancyhf[c]{\thepage} 
+\pagenumbering{roman}
+%\pagestyle{fancy}
+
+%\assignpagestyle{\chapter}{fancy}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                FRONT MATTER
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Document Begins %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\renewcommand*\listfigurename{LIST OF FIGURES} 
+\renewcommand*\listtablename{LIST OF TABLES} 
+\renewcommand{\appendixname}{APPENDIX}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+
+%\RestyleAlgo{ruled}
+
+\ifmodule  \renewcommand{\chaptername}{Task} \fi
+
+
+%The below command splits the formatting into two conditions, the first is if the paper if there is only one author, the second condition is if there are two authors
+
+%\newcommand\mycmd[2][]{%
+%  \ifstrempty{#1}{%
+\ifoneauthor  
+%----------------------------Condition One-------------------------------------   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Title Page %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{titlepage}
+	\centering
+	\vspace{5cm}
+	\LARGE\textbf{\thetitle}\\[1.0 cm]                       %Title of Thesis, if the title is long and causes the title page to overflow adjust the spacing at the bottom at the vspace commands
+    %\includegraphics[scale = 3]{UScrest-WM.jpg}\\[1.0 cm]	% University Logo
+    \includegraphics[scale = 1]{images/SU_logo_new.jpg}\\[0.2 cm]	% University Logo
+	\LARGE \textbf{\theauthor}\\ \ifmodule  \textbf{\studentnumber} \\ \fi \vspace{0.8cm} %\vspace{2cm} 
+	\normalsize \projecttype \text{ }presented in the partial fulfilment\\
+	of the requirement for the \ifmodule course \else degree of \fi \\
+	\fulldegree \\
+	\ifmodule \monthdate \ \yeardate \else at Stellenbosch University \fi \\
+%	\vspace{2cm}
+	\vspace{1cm}
+	\textbf{\ifmodule Lecturer: \else Supervisor: \fi}\supervisortitle \ \supervisor 
+%	\vspace{2cm}
+%	\vspace{1cm}
+	\ifmodule \else
+%	\begin{flushleft}
+%	Degree of confidentiality: \degreeofconf \hspace{22em} \monthdate \ \yeardate
+%	\end{flushleft}
+\begin{center}
+\monthdate \ \yeardate
+\end{center}
+	\fi
+\end{titlepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Plagiarism Declaration %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setcounter{page}{2}
+
+\chapter*{PLAGIARISM DECLARATION}
+
+\begin{enumerate}
+    \item Plagiarism is the use of ideas, material and other intellectual property of another's work and to present it as my own. 
+    \item I agree that plagiarism is a punishable offence because it constitutes theft. 
+    \item Accordingly, all quotations and contributions from any source whatsoever (including the internet) have been cited fully. I understand that the reproduction of text without quotation marks (even when the source is cited) is plagiarism.
+    \item I also understand that direct translations are plagiarism. 
+    \item I declare that the work contained in this \MakeLowercase{\projecttype}, except otherwise stated, is my original work and that I have not previously (in its entirety or in part) submitted it for grading in this \MakeLowercase{\projecttype} or another \MakeLowercase{\projecttype}. 
+\end{enumerate}
+\vspace{2cm}
+
+\begin{table*}[htpb]
+\centering
+\begin{tabular}{|p{7.75cm}|p{7.75cm}|} 
+\hline
+        &                \\ 
+        &               \\
+\studentnumber   &      \\
+\hline
+\large{Student number}   & \large{Signature}      \\ 
+\hline
+& \\
+& \\
+\authorinitials \ \authorsurname & \daydate \ \monthdate \ \yeardate  \\ 
+\hline
+Initials and surname & \large{Date} \\
+\hline
+\end{tabular}
+\end{table*}
+\vspace{2cm}
+\begin{center}
+    Copyright \textcopyright\, \yeardate  \ Stellenbosch University\\
+    All rights reserved
+\end{center}
+\addcontentsline{toc}{chapter}{PLAGIARISM DECLARATION}
+\newpage
+%  }{%
+\else  
+%----------------------------Condition Two-------------------------------------   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Title Page %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+    \begin{titlepage}
+	\centering
+	\ifmodule \vspace{3cm} \else \vspace{5cm} \fi
+	\LARGE\textbf{\thetitle}\\[1.0 cm]                       %Title of Thesis, if the title is long and causes the title page to overflow adjust the spacing at the bottom at the vspace commands
+    %\includegraphics[scale = 3]{UScrest-WM.jpg}\\[1.0 cm]	% University Logo
+    \includegraphics[scale = 0.7]{images/SU_logo_new.jpg}\\[1.0 cm]	% University Logo
+	\Large \textbf{\theauthor}\text{ } \\ \ifmodule  \textbf{\studentnumber} \\ \fi
+	\textbf{and} \\ 
+	\textbf{\authortwo} \ifmodule \\  \textbf{\studenttwonumber}  \fi \\[1cm]  
+	\normalsize \projecttype \text{ }presented in the partial fulfilment\\
+	of the requirement for the \ifmodule course \else degree of \fi \\
+	\fulldegree \\
+	\ifmodule \monthdate \ \yeardate \else at the University of Stellenbosch \fi \\
+	\vspace{1.5cm} 
+	\textbf{\ifmodule Lecturer: \else Supervisor: \fi}\supervisortitle \ \supervisor 
+	\vspace{1.5cm} 
+	\ifmodule \else 
+	\begin{flushleft}
+	Degree of confidentiality: \degreeofconf \hspace{22em}  \monthdate \ \yeardate
+	\end{flushleft}
+	\fi
+\end{titlepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Plagiarism Declaration %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setcounter{page}{2}
+
+\chapter*{PLAGIARISM DECLARATION}
+
+\begin{enumerate}
+    \item Plagiarism is the use of ideas, material and other intellectual property of another's work and to present it as our own. 
+    \item We agree that plagiarism is a punishable offence because it constitutes theft. 
+    \item Accordingly, all quotations and contributions from any source whatsoever (including the internet) have been cited fully. We understand that the reproduction of text without quotation marks (even when the source is cited) is plagiarism.
+    \item We also understand that direct translations are plagiarism. 
+    \item We declare that the work contained in this \MakeLowercase{\projecttype}, except otherwise stated, is our original work and that we have not previously (in its entirety or in part) submitted it for grading in this \MakeLowercase{\projecttype} or another \MakeLowercase{\projecttype}. 
+\end{enumerate}
+\vspace{1cm}
+
+\begin{table*}[htpb]
+\centering
+\begin{tabular}{|p{7.75cm}|p{7.75cm}|} 
+\hline
+        &                \\ 
+\studentnumber   &      \\
+\hline
+\large{Student number}   & \large{Signature}      \\ 
+\hline
+& \\
+\authorinitials \ \authorsurname & \daydate \ \monthdate \ \yeardate  \\ 
+\hline
+Initials and surname & \large{Date} \\
+\hline
+        &                \\ 
+\studenttwonumber   &      \\
+\hline
+\large{Student number}   & \large{Signature}      \\ 
+\hline
+& \\
+\authortwoinitials \ \authortwosurname & \daydate \ \monthdate \ \yeardate  \\ 
+\hline
+Initials and surname & \large{Date} \\
+\hline
+\end{tabular}
+\end{table*}
+\vspace{1cm}
+\begin{center}
+    Copyright \textcopyright \ \yeardate \ Stellenbosch University\\
+    All rights reserved
+\end{center}
+\addcontentsline{toc}{chapter}{PLAGIARISM DECLARATION}
+\newpage
+ % }%
+%}
+\fi
+
+
+
+
+
+
+
+
+
+% --------------Settings to set if paper has one or two authors--------------------
+
+%\mycmd[][\author]                      One author
+%\mycmd[\authortwo][\author]            Two authors
+
+%\mycmd[][]
+
+
+
+%%%%%%%%%%%%%%%%%%%%%% Insert Acknowledgements Here %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\ifmodule \else
+\chapter*{ACKNOWLEDGEMENTS}
+
+Firstly, I want to thank my parents, Leon and Tessa Halgryn, and my siblings, Andre and Rita Halgryn, for their unwavering support and encouragement throughout the course of my studies. Secondly, I want to thank my supervisor, Prof. Steve Kroon, for his invaluable insights and guidance on this project. Lastly, I want to thank our masters programme coordinator, Prof. Willie Brink.
+
+\addcontentsline{toc}{chapter}{ACKNOWLEDGEMENTS}
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%% Insert Your Abstract Here %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter*{ABSTRACT}
+
+In the realm of Bayesian machine learning and probabilistic modelling, practitioners are often faced with complex/intractable posterior distributions that cannot be evaluated in closed form, and hence are not amenable to use in downstream tasks. Hence, accurate approximation of such distributions remains an important and challenging problem.
+
+Stein variational gradient descent (SVGD) has recently been proposed to address this problem by iteratively applying deterministic updates to a set of particles to match the posterior distribution of interest. To this end, the particle positions are iteratively updated by following the direction of steepest descent on reverse KL divergence within a ball of reproducing kernel Hilbert space. The development of SVGD stems from a discrepancy measure used in goodness-of-fit tests that has roots in Stein's method in theoretical statistics.
+
+This study provides a comprehensive survey of SVGD and its theoretical underpinnings, aiming to shed light on the algorithm and its applicability in practice. Furthermore, this study discusses an implementation of SVGD in reinforcement learning known as the Stein variational policy gradient (SVPG) method. A novel variant of SVPG is introduced that leverages ideas from existing variants of SVGD. Several experiments are conducted to demonstrate the performance of SVGD and SVPG.
+
+Our results indicate that SVGD shows significant promise for approximating complex target distributions, and outperforms several well-known MCMC algorithms on a simple sampling experiment.
+Furthermore, the results demonstrate that SVPG and our variant thereof outperform the REINFORCE policy gradient method on classic control and Box2D gym problems.
+
+\textbf{Key words:}\\
+Variational inference; Stein's method; particle-based optimisation; kernel-based methods; reinforcement learning; policy gradient methods.
+
+\addcontentsline{toc}{chapter}{ABSTRACT}
+
+\newpage
+
+
+%%%%%%%%%%%%%%%%%%% Insert Your Opsomming Here %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\chapter*{OPSOMMING}
+%
+%Sluit 'n Afrikaanse opsomming in. Dit is nie meer verpligtend om 'n Afrikaanse opsomming in 'n werkstuk in te sluit nie.\\\\
+%\textbf{Sleutelwoorde:}\\
+%Tegniese vereistes, Voorgestelde Hoofstukke, Voorbeelde.
+%
+% \addcontentsline{toc}{chapter}{OPSOMMING}
+%
+%\newpage
+%\fi
+%
+%\tableofcontents
+%\pagebreak
+%
+%\ifmodule \else
+%\listoffigures
+% \addcontentsline{toc}{chapter}{LIST OF FIGURES}
+%\listoftables
+%\addcontentsline{toc}{chapter}{LIST OF TABLES}
+%\fi
+
+%%%%%%%%%%%%%%%%%% Insert your list of appendices here %%%%%%%%%%%%%%
+
+\chapter*{LIST OF APPENDICES}
+
+\begin{table}[htpb]
+\begin{tabular}{p{3cm} p{7cm}}
+APPENDIX \ref{appendix:proofs} & DERIVATIONS AND PROOFS \\
+APPENDIX \ref{appendix:algos} & ALGORITHMS
+\end{tabular}
+\end{table}
+\addcontentsline{toc}{chapter}{LIST OF APPENDICES}
+\newpage
+%%%%%%%%%%%%%%%%%% Insert your list of abbrevations and/or acryonyms %%%%%%%%%%%%%%
+
+\chapter*{LIST OF ABBREVIATIONS AND/OR ACRONYMS}
+
+\begin{table}[htpb]
+\begin{tabular}{p{3cm} p{7cm}}
+SVGD & Stein Variational Gradient Descent \\
+SVPG & Stein Variational Policy Gradient\\
+KSD & Kernelised Stein discrepancy \\
+GOF & Goodness-of-fit\\
+IPM & Integral probability metric\\
+i.i.d & Independent and identically distributed\\
+RKHS & Reproducing kernel Hilbert space\\
+KL & Kullback-Leibler\\
+VI & Variational inference\\
+GMM & Gaussian mixture model\\
+MH & Metropolis-Hastings\\
+HMC & Hamiltonial/Hybrid Monte Carlo\\
+NUTS & No U-Turn sampler\\
+RBF & Radial basis function\\
+BL & Bounded Lipschitz\\
+MCMC & Markov chain Monte Carlo\\
+MAP & Maximum \textit{a posteriori}\\
+GAN & Generative adversarial network\\
+VAE & Variational autoencoder\\
+BNN & Bayesian neural network\\
+COD & Curse of dimensionality\\
+RL & Reinforcement learning\\
+\end{tabular}
+\end{table}
+\addcontentsline{toc}{chapter}{LIST OF ABBREVIATIONS AND/OR ACRONYMS}
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\pagenumbering{arabic}
+\renewcommand{\arraystretch}{1}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Input your chapters here %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\input{Chapters/Chapter1.tex}
+%\input{Chapters/Chapter2.tex}
+%\input{Chapters/Chapter2_rewrite.tex}
+\input{Chapters/Chapter2_rewrite_new.tex}
+%\input{Chapters/Chapter3.tex}
+\input{Chapters/Chapter3_rewrite.tex}
+%\input{Chapters/Chapter4.tex}
+\input{Chapters/Chapter4_rewrite.tex}
+\input{Chapters/Chapter5.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Bibliography %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{ussagus} 
+%\bibliographystyle{apalike}
+%\bibliographystyle{plain}
+%\bibliographystyle{unsrt}
+\bibliography{biblist}
+\addcontentsline{toc}{chapter}{REFERENCES}
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Insert your appendix here %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+\begin{appendices}
+\input{Appendices/Proofs.tex}
+\input{Appendices/Algorithms.tex}
+\end{appendices}
+
+
+\end{document}
