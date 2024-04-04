@@ -1,0 +1,135 @@
+\chapter{Derivations and Proofs}
+\label{appendix:proofs}
+
+\begin{proof}[Proof of Lemma \ref{lemma:steins_lemma} (Stein's lemma)]
+$\\$
+Let $\phi(z)$ denote the probability density function of $Z \sim \mathcal{N}(0,1)$. We can use integration by parts to prove the lemma starting from the RHS as follows:
+\begin{align*}
+\mathbb{E}\left[f'(Z) \right] &= \int_{-\infty}^{\infty} f'(z)\phi(z) dz\\
+&= f(z)\phi(z)\big|_{-\infty}^{\infty} - \int_{-\infty}^{\infty} f(z)\phi'(z)dz \quad \text{(using integration by parts)}\\
+&= 0 - \int_{-\infty}^{\infty} f(z)\left[- z \phi(z) \right]dz \quad \text{(since $\phi'(z) = -z\phi(z)$)}\\
+&= \int_{-\infty}^{\infty} \phi(z)\cdot z f(z)dz\\
+&= \mathbb{E}\left[Z f(Z)\right] \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proof}[Proof of Corollary \ref{corollary:2_2}]
+$\newline$
+Let $Z = \frac{1}{\sigma}(X - \mu) \sim \mathcal{N}(0,1)$, and let $\tilde{f}(z) = f(\sigma z + \mu)$, where $X = \sigma Z + \mu \sim \mathcal{N}(\mu, \sigma^2)$. Note that, since we assume that $f$ is absolutely continuous, $\tilde{f}$ is also absolutely continuous. We can now write:
+\begin{align*}
+&\mathbb{E}\left[Z \tilde{f}(Z)\right] = \mathbb{E}\left[\tilde{f}'(z)\right] \quad \text{(by Lemma \ref{lemma:steins_lemma})}\\
+\implies &\mathbb{E}\left[\frac{1}{\sigma}(X - \mu) \tilde{f}(Z)\right] = \mathbb{E}\left[\tilde{f}'(Z) \right]\\
+\implies &\frac{1}{\sigma}\mathbb{E}\left[(X - \mu)f(\sigma Z + \mu)\right] = \mathbb{E}\left[f'(\sigma Z + \mu)\right] \quad \text{(by definition of $\tilde{f}$)}\\
+\implies &\frac{1}{\sigma}\mathbb{E}\left[(X - \mu) f(X)\right] = \sigma \mathbb{E}\left[f'(X)\right] \quad \text{(by the chain rule for derivatives)}\\
+\implies & \frac{1}{\sigma^2}\left[(X - \mu)f(X)\right] = \mathbb{E}\left[f'(X)\right] \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proof}[Proof of Lemma \ref{lemma:2_10}]
+\begin{equation*}
+s_p(x) = \nabla_x \log p(x) = \frac{\nabla_x p(x)}{p(x)} = \frac{\nabla_x \frac{1}{Z}\tilde{p}(x)}{\frac{1}{Z}\tilde{p}(x)} = \frac{\nabla_x \tilde{p}(x)}{\tilde{p}(x)} = s_{\tilde{p}}(x) \qedhere
+\end{equation*}
+\end{proof}
+
+\begin{proof}[Proof of Corollary \ref{corollary:2_13}]$\\$
+According to Definition \ref{defn:stein_operator1}, the Stein class $\mathcal{F}(\mathcal{T}_p)$ for a distribution $P$ with Stein operator $\mathcal{T}_p$ is given by the class of functions $\mathcal{F}$ that satisfy:
+\begin{equation*}
+\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X) \right] = 0 \forall f \in \mathcal{F} \iff X \sim P \enspace.
+\end{equation*}
+If we take $\mathcal{T}_p$ to be the Langevin-Stein operator given in Equation (\ref{eqn:ls_operator}), we may write:
+\begin{align*}
+&\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X) \right] = 0\\
+\iff & \mathbb{E}_{X \sim P} \left[\nabla_X \log p(X) f(X) + \nabla_X f(X)\right] = 0\\
+\iff & \int_{x \in \mathcal{X}} p(x) \left[\frac{\nabla_x p(x)}{p(x)}f(x) + \nabla_x f(x) \right]dx = 0\\
+\iff & \int_{x \in \mathcal{X}} \left[p(x)\frac{\nabla_x p(x)}{p(x)}f(x) + p(x) \nabla_x f(x)  \right]dx = 0\\
+\iff & \int_{x \in \mathcal{X}} \left[f(x) \nabla_x p(x) + p(x)\nabla_x f(x) \right]dx = 0\\
+\iff & \int_{x \in \mathcal{X}} \nabla_x\left[f(x)p(x) \right]dx = 0 \quad \text{(by product rule)}
+\end{align*}
+The final equality above is the form of the Langevin-Stein class as given in Definition \ref{defn:langevin_stein_class}. \qedhere
+\end{proof}
+
+\begin{proof}[Proof of Lemma \ref{lemma:stein_identity} (Stein's identity)]
+\begin{align*}
+\mathbb{E}_{X \sim P}\left[\mathcal{T}_p f(X)\right] &= \mathbb{E}_{X \sim P} \left[\nabla_X \log p(X) f(X) + \nabla_X f(X) \right]\\
+&= \int_{x \in \mathcal{X}} p(x) \left[\nabla_x \log p(x)f(x) + \nabla_x f(x) \right]dx\\
+&= \int_{x \in \mathcal{X}} p(x) \left[\frac{\nabla_x p(x)}{p(x)}f(x) + \nabla_x f(x) \right]dx\\
+&= \int_{x \in \mathcal{X}} \left[f(x)\nabla_x p(x)  + p(x) \nabla_x f(x)\right]dx\\
+&= \int_{x \in \mathcal{X}} \nabla_x \left[p(x)f(x) \right]dx \quad \text{(by the product rule for derivatives)}\\
+&= 0 \quad \text{(by definition of Stein class)} \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proof}[Proof of Corollary \ref{corollary:stein_identity}]
+\begin{align*}
+\mathbb{E}_{X \sim Q} \left[\mathcal{T}_p f(X) \right] &= \mathbb{E}_{X \sim Q}\left[\mathcal{T}_p f(X)\right] - \mathbb{E}_{X \sim Q}\left[\mathcal{T}_q f(X)\right] \quad \text{(since $ \mathbb{E}_{X \sim Q}\left[\mathcal{T}_q f(X)\right]  = 0$ by Stein's identity for $Q$)}\\
+&= \mathbb{E}_{X \sim Q} \left[s_p(X)f(X)^T + \nabla_X f(X) \right] - \mathbb{E}_{X \sim Q} \left[s_q(X)f(X)^T + \nabla_X f(X) \right] \quad \text{(by Definition \ref{defn:ls_operator})}\\
+&= \mathbb{E}_{X \sim Q} \left[\left\{s_p(X) - s_q(X) \right\}f(X)^T\right] \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proof}[Proof of Theorem \ref{thm:toward_stein_discrepancy} (by contradiction)]
+\begin{align*}
+&\mathbb{E}_{X \sim Q}[\mathcal{T}_p f(X)] = 0 \\
+\iff & \mathbb{E}_{X \sim Q}[\left(s_p(X) - s_q(X)\right)f(X)] = 0 \quad \text{(by Corollary \ref{corollary:stein_identity})}\\
+\iff & s_p(x) - s_q(x) = 0 \hspace{0.1cm} \forall x \in \mathcal{X} \quad \text{(assuming $f \not= 0$ a.e)}\\
+\iff & \int_{x \in \mathcal{X}} \left[\nabla_x \log p(x) - \nabla \log q(x) \right]dx = 0\\
+\iff & \int_{x \in \mathcal{X}} \nabla_x \cdot \left[\log p(x) - \log q(x) \right]dx \quad \text{(by the divergence theorem)}\\
+\iff & \int_{x \in \mathcal{X}} \nabla_x \log \frac{p(x)}{q(x)}dx = 0 \\
+\iff & \log \frac{p(x)}{q(x)} = 0\\
+\iff & \frac{p(x)}{q(x)} = 1 \\
+\iff & p(x) = q(x)
+\end{align*}
+\text{This contradicts the assumption that $P \not= Q$}. 
+\end{proof}
+
+\newenvironment{derivation}
+{\begin{proof}[Derivation of KSD in Definition \ref{defn:ksd}]\setlength{\parskip}{0.5em}}
+{\end{proof}}
+\begin{derivation}
+$\\$
+We can derive this form of KSD starting from the more general form of the Stein discrepancy in Definition \ref{defn:stein_discrepancy} as follows.
+%\begin{align*}
+%\mathbb{S}(q||p) :&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup}\left \{ \mathbb{E}_q\left[\mathcal{T}_p f(x) \right] - \mathbb{E}_q \left[ \mathcal{T}_q f(x) \right] \right \}^2\\
+%&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup} \mathbb{E}_q\left[\mathcal{T}_p f(x) \right]^2 \quad \text{(by Stein's identity for $q$)}\\
+%&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup}\left \langle f(\cdot), \mathbb{E}_q\left[\mathcal{T}_p k(\cdot, x) \right] \right \rangle_{\mathcal{H}}^2\quad \text{(reproducing property)}\\
+%&= \lVert \mathbb{E}_q \left[\mathcal{T}_p k(\cdot, x) \right] \rVert_{\mathcal{H}}^2\\ %explanation needed
+%&= \left \langle \mathbb{E}_{x \sim q} \left[\mathcal{T}_p k(\cdot, x) \right], \mathbb{E}_{x' \sim q} \left[\mathcal{T}_p k(\cdot, x') \right] \right \rangle_{\mathcal{H}}\\
+%&=  \left\langle \mathbb{E}_{x \sim q} \left[\left(s_p(x) - s_q(x)\right) k(\cdot, x) \right], \mathbb{E}_{x' \sim q} \left[\left(s_p(x') - s_q(x')\right) k(\cdot, x') \right] \right\rangle_{\mathcal{H}} \quad \text{(by Corollary \ref{corollary:stein_identity})}\\
+%&= \mathbb{E}_{x, x' \sim q} \left[\left(s_p(x) - s_q(x)\right)^T k(x, x')\left(s_p(x) - s_q(x)\right) \right] \quad \text{(reproducing property)} \qedhere
+%\end{align*} 
+\begin{align*}
+\mathbb{S}(q||p) :&= \mathbb{D}_{\mathrm{Stein}}(q, p; \mathcal{B}_{\mathcal{H}})\\
+&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup} \left \{\mathbb{E}_{X \sim Q} \left[\mathrm{trace}(\mathcal{T}_p f(X)) \right]^2 \right\} \quad \text{(by Definition \ref{defn:stein_discrepancy})}\\
+&= \underset{f \in \mathcal{B}_{\mathcal{H}}}{\sup}\left \langle f(\cdot), \mathbb{E}_{X \sim Q}\left[\mathcal{T}_p k(\cdot, X) \right] \right \rangle_{\mathcal{H}}^2\quad \text{(reproducing property)}\\
+&= \lVert \mathbb{E}_{X \sim Q} \left[\mathcal{T}_p k(\cdot, X) \right] \rVert_{\mathcal{H}}^2 \quad \text{(representer theorem)}\\ %explanation needed
+&= \left \langle \mathbb{E}_{X \sim Q} \left[\mathcal{T}_p k(\cdot, X) \right], \mathbb{E}_{X' \sim Q} \left[\mathcal{T}_p k(\cdot, X') \right] \right \rangle_{\mathcal{H}}\\
+&=  \left\langle \mathbb{E}_{X \sim Q} \left[\left(s_p(X) - s_q(X)\right) k(\cdot, X) \right], \mathbb{E}_{X' \sim Q} \left[\left(s_p(X') - s_q(X')\right) k(\cdot, X') \right] \right\rangle_{\mathcal{H}} \quad \text{(by Corollary \ref{corollary:stein_identity})}\\
+&= \mathbb{E}_{X, X' \sim Q} \left[\left(s_p(X) - s_q(X)\right)^T k(X, X')\left(s_p(X') - s_q(X')\right) \right] \quad \text{(reproducing property)} \qedhere
+\end{align*} 
+\end{derivation}
+
+
+\renewenvironment{derivation}
+{\begin{proof}[Derivation of optimal posterior parameter distribution in Equation \ref{eqn:optimal_q}]\setlength{\parskip}{0.5em}}
+{\end{proof}}
+\begin{derivation}
+\begin{align*}
+&\nabla_q \tilde{J}(\theta) = 0\\
+\iff & \nabla_q \left\{\mathbb{E}_q[J(\theta) - \alpha \mathbb{D}_{\text{KL}}(q||q_0)] \right\} = 0\\
+\iff & \nabla_q \int_\theta \big\{q(\theta)J(\theta) - \alpha q(\theta) \left[\log q(\theta) - \log q_0(\theta)\right]\big\}d\theta = 0\\
+\iff & \nabla_q \int_{\theta} \big\{q(\theta)J(\theta) - \alpha q(\theta) \log q(\theta) + \alpha q(\theta) \log q_0(\theta) \big\}d\theta = 0\\
+\iff & \int_{\theta}\big\{\nabla_q \left[q(\theta) J(\theta)\right] - \alpha \nabla_q\left[ q(\theta) \log q(\theta)\right] + \alpha \nabla_q\left[q(\theta) \log q_0(\theta)\right]\big\}d\theta = 0\\
+\iff & \int_\theta \left\{J(\theta) - \alpha \left[\log q(\theta) + q(\theta) \frac{\nabla_q q(\theta)}{q(\theta)} \right] + \alpha \log q_0(\theta) \right\}d\theta = 0\\
+\iff & \int_\theta \big\{J(\theta) - \alpha \log q(\theta) - \alpha + \alpha \log q_0(\theta) \big\}d\theta = 0\\
+\iff & J(\theta) - \alpha \log q^*(\theta) - \alpha + \alpha \log q_0(\theta) = 0\\
+\iff & J(\theta) = \alpha \left[\log q^*(\theta) + 1 - \log q_0(\theta) \right]\\
+\iff & \log q^*(\theta) = \frac{1}{\alpha}J(\theta) + \log q_0(\theta) - 1\\
+\implies & q^*(\theta) \propto \exp \left(\frac{1}{\alpha}J(\theta) \right)q_0(\theta) \qedhere
+\end{align*}
+\end{derivation}
+
+
+%This is how an appendix is given. It has a heading just like a chapter and title describing the appendix. Whenever it is referred to in the main section of the report, it is referred to as Appendix A.\\
+%
+%This might include your questionnaire, feedback from respondents, maps, etc.
+%If you have any figures or tables here, number the according to the appendix, e.g. Figure A.1 would be the first figure in Appendix A.

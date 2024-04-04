@@ -1,0 +1,39 @@
+\chapter{Algorithms}
+\label{appendix:algos}
+
+\begin{algorithm}[ht]
+\KwIn{Target distribution $p(x)$, set of initial particles $\{x_i^{(0)}\}_{i=1}^n$, and a step size sequence $\{\epsilon_t\}$.}
+\KwOut{A set of particles $\{x_i\}_{i=1}^n$ that approximates the target distribution.}
+\textbf{Require:} Score function of the target distribution, $s_p(x) = \nabla_x \log p(x)$ and a positive definite kernel $k(x, x')$\\
+\For{iteration t }{
+	\For{\text{particle} $i = 1$ \textbf{to} $n$}{
+		Compute optimal update direction using Equation (\ref{eqn:svgd_phi_optimal}): $$\hat{\phi}^*(x_i) = \frac{1}{n} \sum_{j=1}^n \nabla_{x_j} \log p(x_j) k(x_j, x_i) + \nabla_{x_j}k(x_j, x_i)$$\\
+		Update particle position using Equation (\ref{eqn:svgd_update}): $$x_i \gets x_i + \epsilon_t \hat{\phi}^*(x_i)$$
+	}
+}
+\Return{Final particles $\{x_i\}_{i=1}^n$}
+\caption{\label{alg:svgd} Stein Variational Gradient Descent}
+\end{algorithm}
+
+\begin{algorithm}[h!]
+\KwIn{Posterior parameter distribution $q^*(\theta)$, prior distribution $q_0(\theta)$, set of initial particles $\{\theta_i^{(0)}\}_{i=1}^n$ and a step size sequence $\{\epsilon_t\}$.}
+\KwOut{A set of particles $\{\theta_i\}_{i=1}^n$ that corresponds to a diverse set of policies $\{\pi_{\theta_i}(a|s)\}_{i=1}^n$.}
+\textbf{Require:} A set of positive definite component kernels $\{k_l(\cdot, \cdot)\}_{l=1}^m$, initial temperature $\alpha_0$ and a decay factor $\delta$.\\
+\For{iteration t }{
+%	Compute annealing parameter $\delta_t = \delta(t)$ using Equation (\ref{eqn:4_9}).\\
+	Compute temperature parameter $\alpha_t = \alpha_0(1 - \delta)^t$.\\
+	\For{\text{particle} $i = 1$ \textbf{to} $n$}{
+	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+	Compute optimal update direction using Equation (\ref{eqn:4_12}): $$\phi_l^*(\theta_i) = \frac{1}{n}\sum_{j=1}^n  k_l(\theta_j, \theta_i) \nabla_{\theta_j} \left[\frac{1}{\alpha_t} \cdot J(\theta_j) + \log q_0(\theta_j) \right] + \nabla_{\theta_j}k_l(\theta_j, \theta_i)$$
+	where $\nabla_{\theta_j}J(\theta_j)$ can be computed using any existing PG method.\\
+	}
+	\For{\text{component kernel index} $l=1$ \textbf{to} $m$}{
+	Compute kernel weight using Equation (\ref{eqn:4_14}): $$w_l = \frac{\lVert \phi_l^*(\cdot) \rVert}{\sum_{k=1}^m \lVert \phi_k^*(\cdot) \rVert}$$
+	}
+	Compute overall optimal update direction using Equation (\ref{eqn:4_13}): $$\phi^*(\theta_i) = \sum_{l=1}^m w_l \phi^*_l(\theta_i)$$\\
+	Update particle position: $$\theta_i \leftarrow \theta_i + \epsilon_t \phi^*(\theta_i)$$
+	}
+}
+\Return{Final particles $\{\theta_i\}_{i=1}^n$}
+\caption{\label{alg:a_mk_svpg} Multiple-Kernel Stein Variational Policy Gradient.}
+\end{algorithm}
